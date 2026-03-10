@@ -14,7 +14,7 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc, collection, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc, collection, getDocs, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
     const firebaseConfig = {
       apiKey: "AIzaSyCqvx_WIP4Rgs4YvaAzLRc5WDZOMCmPWNI",
       authDomain: "surya-gym-attendance-267b8.firebaseapp.com",
@@ -25,25 +25,27 @@
     };
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
-    window._db = db;
-    window._saveAttendance = async (dateKey, data) => { await setDoc(doc(db, "attendance", dateKey), data); };
-    window._loadAttendance = async (dateKey) => { const snap = await getDoc(doc(db, "attendance", dateKey)); return snap.exists() ? snap.data() : null; };
-    window._listenAttendance = (dateKey, cb) => onSnapshot(doc(db, "attendance", dateKey), snap => cb(snap.exists() ? snap.data() : null));
-    window._loadAllDates = async () => { const snap = await getDocs(collection(db, "attendance")); return snap.docs.map(d => d.id); };
+    window._saveAttendance   = async (k,d) => await setDoc(doc(db,"attendance",k),d);
+    window._loadAttendance   = async (k)   => { const s=await getDoc(doc(db,"attendance",k)); return s.exists()?s.data():null; };
+    window._listenAttendance = (k,cb)      => onSnapshot(doc(db,"attendance",k),s=>cb(s.exists()?s.data():null));
+    window._loadAllDates     = async ()    => { const s=await getDocs(collection(db,"attendance")); return s.docs.map(d=>d.id); };
+    window._saveStaff        = async (s)   => await setDoc(doc(db,"config","staff"),{list:s});
+    window._listenStaff      = (cb)        => onSnapshot(doc(db,"config","staff"),s=>cb(s.exists()?s.data().list:null));
     window._fbReady = true;
     window.dispatchEvent(new Event("firebaseReady"));
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet" />
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #080c10; color: #e8edf2; font-family: 'Barlow Condensed', sans-serif; }
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-thumb { background: #ff4d00; border-radius: 2px; }
-    @keyframes slide-in { from{opacity:0;transform:translateX(-20px)} to{opacity:1;transform:translateX(0)} }
-    @keyframes flame { 0%,100%{transform:scaleY(1) rotate(-1deg)} 50%{transform:scaleY(1.05) rotate(1deg)} }
-    @keyframes save-flash { 0%{background:#ff4d00} 50%{background:#00ff87} 100%{background:#ff4d00} }
-    @keyframes toast-in { from{opacity:0;transform:translateY(20px) translateX(-50%)} to{opacity:1;transform:translateY(0) translateX(-50%)} }
-    @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#080c10;color:#e8edf2;font-family:'Barlow Condensed',sans-serif}
+    ::-webkit-scrollbar{width:4px}
+    ::-webkit-scrollbar-thumb{background:#ff4d00;border-radius:2px}
+    @keyframes slide-in{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
+    @keyframes flame{0%,100%{transform:scaleY(1) rotate(-1deg)}50%{transform:scaleY(1.05) rotate(1deg)}}
+    @keyframes save-flash{0%{background:#ff4d00}50%{background:#00ff87}100%{background:#ff4d00}}
+    @keyframes toast-in{from{opacity:0;transform:translateY(20px) translateX(-50%)}to{opacity:1;transform:translateY(0) translateX(-50%)}}
+    @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    @keyframes modal-in{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
     .grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(255,77,0,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,77,0,0.04) 1px,transparent 1px);background-size:40px 40px}
     .glow{position:fixed;top:-100px;right:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(255,77,0,0.12) 0%,transparent 70%);pointer-events:none;z-index:0}
     .wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:24px 16px}
@@ -53,7 +55,7 @@
     .btn-Absent.active{background:rgba(255,77,109,0.15);border-color:#ff4d6d;color:#ff4d6d}
     .btn-HalfDay.active{background:rgba(255,214,10,0.15);border-color:#ffd60a;color:#ffd60a}
     .btn-Leave.active{background:rgba(167,139,250,0.15);border-color:#a78bfa;color:#a78bfa}
-    .tab-btn{cursor:pointer;background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;letter-spacing:2px;padding:10px 24px;color:#4b5563;border-bottom:2px solid transparent;transition:all 0.2s;text-transform:uppercase}
+    .tab-btn{cursor:pointer;background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;letter-spacing:2px;padding:10px 20px;color:#4b5563;border-bottom:2px solid transparent;transition:all 0.2s;text-transform:uppercase}
     .tab-btn.active{color:#ff4d00;border-bottom-color:#ff4d00}
     .tab-btn:hover{color:#e8edf2}
     .emp-row{animation:slide-in 0.3s ease both;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px 16px;margin-bottom:8px;transition:border-color 0.2s}
@@ -64,14 +66,15 @@
     .save-btn.flashing{animation:save-flash 0.6s ease}
     .stat-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px 10px;text-align:center;flex:1;transition:transform 0.2s}
     .stat-card:hover{transform:translateY(-3px)}
-    input[type=date]{background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,77,0,0.3);border-radius:6px;color:#e8edf2;font-family:'Barlow Condensed',sans-serif;font-size:14px;padding:7px 10px;outline:none;cursor:pointer}
-    input[type=date]:focus{border-color:#ff4d00}
+    input[type=date],input[type=text],input[type=password]{background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,77,0,0.3);border-radius:6px;color:#e8edf2;font-family:'Barlow Condensed',sans-serif;font-size:14px;padding:7px 10px;outline:none;cursor:pointer;width:100%}
+    input[type=date]{width:auto}
+    input[type=text]:focus,input[type=password]:focus,input[type=date]:focus{border-color:#ff4d00}
     select{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#9ca3af;font-family:'Barlow',sans-serif;font-size:12px;padding:7px 8px;outline:none;cursor:pointer;width:100%;border-radius:5px}
     select:focus{border-color:#ff4d00}
     textarea{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:5px;color:#9ca3af;font-family:'Barlow',sans-serif;font-size:12px;padding:6px 8px;outline:none;resize:none;width:100%}
     textarea:focus{border-color:#ff4d00}
     .divider{height:2px;background:linear-gradient(90deg,#ff4d00,#ff8c0060,transparent);margin-bottom:6px}
-    .tabs-bar{display:flex;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:24px}
+    .tabs-bar{display:flex;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:24px;flex-wrap:wrap}
     .stats-bar{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap}
     .row-flex{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
     .empty{text-align:center;padding:60px 0;color:#374151}
@@ -83,6 +86,22 @@
     .hist-card:hover{border-color:rgba(255,77,0,0.3)}
     .spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,0.15);border-top-color:#ff4d00;border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block;vertical-align:middle;margin-right:8px}
     .sync-dot{width:7px;height:7px;border-radius:50%;background:#00ff87;display:inline-block;margin-right:5px;box-shadow:0 0 5px #00ff87}
+
+    /* Modal */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+    .modal{background:#0d1117;border:1px solid rgba(255,77,0,0.3);border-radius:16px;padding:28px;width:100%;max-width:480px;animation:modal-in 0.25s ease;max-height:90vh;overflow-y:auto}
+    .modal-title{font-size:22px;font-weight:900;letter-spacing:2px;text-transform:uppercase;margin-bottom:20px;color:#ff4d00}
+    .field-label{font-size:11px;color:#6b7280;letter-spacing:1px;margin-bottom:6px;font-family:'Barlow',sans-serif;text-transform:uppercase}
+    .field-group{margin-bottom:14px}
+    .staff-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:14px;margin-bottom:10px}
+    .icon-btn{background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:4px;font-size:14px;transition:all 0.15s}
+    .icon-btn:hover{background:rgba(255,255,255,0.08)}
+    .del-btn{color:#ff4d6d}
+    .del-btn:hover{background:rgba(255,77,109,0.1)}
+    .add-staff-btn{cursor:pointer;background:rgba(255,77,0,0.1);border:1.5px dashed rgba(255,77,0,0.4);border-radius:8px;padding:12px;width:100%;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:2px;color:#ff8c00;text-transform:uppercase;transition:all 0.2s;margin-bottom:16px}
+    .add-staff-btn:hover{background:rgba(255,77,0,0.2);border-color:#ff4d00}
+    .err-msg{color:#ff4d6d;font-size:12px;font-family:'Barlow',sans-serif;margin-top:6px}
+    .pwd-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px;text-align:center}
   </style>
 </head>
 <body>
@@ -91,7 +110,9 @@
 <div class="wrap" id="root"></div>
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
-const EMPLOYEES = [
+
+const ADMIN_PASSWORD = "2020";
+const DEFAULT_STAFF = [
   { id:"emp1", name:"Sai Vaidya",    role:"Trainer",   avatar:"SV", shift:"Morning (6AM–10AM)"   },
   { id:"emp2", name:"Karan Honmane", role:"Reception", avatar:"KH", shift:"Afternoon (11AM–4PM)" },
   { id:"emp3", name:"Aniket Mane",   role:"Trainer",   avatar:"AM", shift:"Evening (5PM–10PM)"   },
@@ -103,32 +124,130 @@ const STATUS_CFG = {
   "Half Day":{color:"#ffd60a",bg:"rgba(255,214,10,0.12)"},
   Leave:     {color:"#a78bfa",bg:"rgba(167,139,250,0.12)"},
 };
+
 function today(){ return new Date().toISOString().split("T")[0]; }
 function fmtDate(d){ return new Date(d+"T00:00:00").toLocaleDateString("en-IN",{weekday:"short",day:"2-digit",month:"short",year:"numeric"}); }
+function makeAvatar(name){ return name.split(" ").map(w=>w[0]||"").join("").toUpperCase().slice(0,2); }
+function makeId(){ return "emp"+Date.now(); }
 
+/* ───── PASSWORD MODAL ───── */
+function PasswordModal({onSuccess, onClose}){
+  const [pwd,setPwd]=useState("");
+  const [err,setErr]=useState("");
+  const check=()=>{
+    if(pwd===ADMIN_PASSWORD){onSuccess();}
+    else{setErr("Wrong password. Try again.");setPwd("");}
+  };
+  return(
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div className="modal-title">🔒 Admin Access</div>
+        <div className="field-group">
+          <div className="field-label">Enter Password</div>
+          <input type="password" placeholder="Password" value={pwd} onChange={e=>setPwd(e.target.value)} onKeyDown={e=>e.key==="Enter"&&check()} autoFocus/>
+          {err&&<div className="err-msg">{err}</div>}
+        </div>
+        <div style={{display:"flex",gap:10,marginTop:8}}>
+          <button className="save-btn" style={{flex:1,padding:"12px"}} onClick={check}>UNLOCK</button>
+          <button onClick={onClose} style={{flex:1,padding:"12px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,color:"#6b7280",cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,letterSpacing:2}}>CANCEL</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───── STAFF EDITOR MODAL ───── */
+function StaffEditor({staff, onSave, onClose}){
+  const [list,setList]=useState(staff.map(e=>({...e})));
+  const [saving,setSaving]=useState(false);
+
+  const update=(id,field,val)=>setList(p=>p.map(e=>e.id===id?{...e,[field]:val,avatar:field==="name"?makeAvatar(val):e.avatar}:e));
+  const addStaff=()=>setList(p=>[...p,{id:makeId(),name:"",role:"",avatar:"",shift:SHIFTS[0]}]);
+  const removeStaff=(id)=>setList(p=>p.filter(e=>e.id!==id));
+
+  const doSave=async()=>{
+    const valid=list.filter(e=>e.name.trim()&&e.role.trim());
+    if(valid.length===0){alert("Add at least one staff member!");return;}
+    setSaving(true);
+    await onSave(valid);
+    setSaving(false);
+    onClose();
+  };
+
+  return(
+    <div className="modal-overlay">
+      <div className="modal">
+        <div className="modal-title">✏️ Edit Staff</div>
+
+        {list.map((emp,i)=>(
+          <div key={emp.id} className="staff-card">
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#ff8c00",letterSpacing:1}}>STAFF #{i+1}</div>
+              <button className="icon-btn del-btn" onClick={()=>removeStaff(emp.id)}>🗑 Remove</button>
+            </div>
+            <div className="field-group">
+              <div className="field-label">Full Name</div>
+              <input type="text" placeholder="e.g. Sai Vaidya" value={emp.name} onChange={e=>update(emp.id,"name",e.target.value)}/>
+            </div>
+            <div className="field-group">
+              <div className="field-label">Role</div>
+              <input type="text" placeholder="e.g. Trainer" value={emp.role} onChange={e=>update(emp.id,"role",e.target.value)}/>
+            </div>
+            <div className="field-group">
+              <div className="field-label">Default Shift</div>
+              <select value={emp.shift} onChange={e=>update(emp.id,"shift",e.target.value)}>
+                {SHIFTS.map(s=><option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+        ))}
+
+        <button className="add-staff-btn" onClick={addStaff}>+ ADD NEW STAFF</button>
+
+        <div style={{display:"flex",gap:10}}>
+          <button className="save-btn" style={{flex:1,padding:"12px"}} onClick={doSave} disabled={saving}>
+            {saving?<><span className="spinner"></span>SAVING...</>:"SAVE CHANGES"}
+          </button>
+          <button onClick={onClose} style={{flex:1,padding:"12px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,color:"#6b7280",cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,letterSpacing:2}}>CANCEL</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───── MAIN APP ───── */
 function App(){
-  const [fbReady,  setFbReady]  = useState(!!window._fbReady);
-  const [date,     setDate]     = useState(today());
-  const [dayData,  setDayData]  = useState(null);
-  const [allDates, setAllDates] = useState([]);
-  const [tab,      setTab]      = useState("mark");
-  const [saving,   setSaving]   = useState(false);
-  const [loading,  setLoading]  = useState(true);
-  const [flash,    setFlash]    = useState(false);
-  const [editNote, setEditNote] = useState(null);
-  const [toast,    setToast]    = useState(null);
-  const unsubRef = useRef(null);
+  const [fbReady,   setFbReady]   = useState(!!window._fbReady);
+  const [date,      setDate]      = useState(today());
+  const [dayData,   setDayData]   = useState(null);
+  const [allDates,  setAllDates]  = useState([]);
+  const [staff,     setStaff]     = useState(DEFAULT_STAFF);
+  const [tab,       setTab]       = useState("mark");
+  const [saving,    setSaving]    = useState(false);
+  const [loading,   setLoading]   = useState(true);
+  const [flash,     setFlash]     = useState(false);
+  const [editNote,  setEditNote]  = useState(null);
+  const [toast,     setToast]     = useState(null);
+  const [showPwd,   setShowPwd]   = useState(false);
+  const [showEditor,setShowEditor]= useState(false);
+  const unsubRef  = useRef(null);
+  const unsubSRef = useRef(null);
 
   useEffect(()=>{
     if(window._fbReady){setFbReady(true);return;}
     const h=()=>setFbReady(true);
     window.addEventListener("firebaseReady",h);
-    return ()=>window.removeEventListener("firebaseReady",h);
+    return()=>window.removeEventListener("firebaseReady",h);
   },[]);
 
   useEffect(()=>{
     if(!fbReady)return;
     window._loadAllDates().then(dates=>setAllDates(dates.sort((a,b)=>b.localeCompare(a))));
+    // Listen to staff changes in real time
+    unsubSRef.current=window._listenStaff(data=>{
+      if(data&&data.length>0)setStaff(data);
+    });
+    return()=>{if(unsubSRef.current)unsubSRef.current();};
   },[fbReady]);
 
   useEffect(()=>{
@@ -136,14 +255,14 @@ function App(){
     setLoading(true);
     if(unsubRef.current)unsubRef.current();
     unsubRef.current=window._listenAttendance(date,data=>{
-      setDayData(data||{statuses:{},shifts:Object.fromEntries(EMPLOYEES.map(e=>[e.id,e.shift])),notes:{}});
+      setDayData(data||{statuses:{},shifts:Object.fromEntries(staff.map(e=>[e.id,e.shift])),notes:{}});
       setLoading(false);
     });
-    return ()=>{if(unsubRef.current)unsubRef.current();};
+    return()=>{if(unsubRef.current)unsubRef.current();};
   },[fbReady,date]);
 
   const statuses  = dayData?.statuses||{};
-  const dayShifts = dayData?.shifts||Object.fromEntries(EMPLOYEES.map(e=>[e.id,e.shift]));
+  const dayShifts = dayData?.shifts||Object.fromEntries(staff.map(e=>[e.id,e.shift]));
   const dayNotes  = dayData?.notes||{};
   const upd=(field,id,val)=>setDayData(p=>({...p,[field]:{...(p?.[field]||{}),[id]:val}}));
 
@@ -152,22 +271,29 @@ function App(){
     try{
       await window._saveAttendance(date,dayData);
       setAllDates(p=>p.includes(date)?p:[date,...p].sort((a,b)=>b.localeCompare(a)));
-      setFlash(true); setTimeout(()=>setFlash(false),1000);
+      setFlash(true);setTimeout(()=>setFlash(false),1000);
       showToast("✓ Saved & synced to all phones!");
-    }catch(e){ showToast("❌ Save failed. Check connection."); }
+    }catch(e){showToast("❌ Save failed. Check connection.");}
     setSaving(false);
   };
+
+  const doSaveStaff=async(newStaff)=>{
+    await window._saveStaff(newStaff);
+    setStaff(newStaff);
+    showToast("✓ Staff updated on all phones!");
+  };
+
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(null),3000);};
 
   const stats={
-    total:EMPLOYEES.length, marked:Object.keys(statuses).length,
+    total:staff.length, marked:Object.keys(statuses).length,
     present:Object.values(statuses).filter(s=>s==="Present").length,
     absent:Object.values(statuses).filter(s=>s==="Absent").length,
     halfDay:Object.values(statuses).filter(s=>s==="Half Day").length,
     leave:Object.values(statuses).filter(s=>s==="Leave").length,
   };
 
-  if(!fbReady) return(
+  if(!fbReady)return(
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"80vh",gap:16}}>
       <div style={{fontSize:48}}>🔥</div>
       <div style={{fontSize:22,fontWeight:900,letterSpacing:3}}>SURYA GYM 2.0</div>
@@ -176,6 +302,11 @@ function App(){
   );
 
   return(<div>
+    {/* Password Modal */}
+    {showPwd&&<PasswordModal onSuccess={()=>{setShowPwd(false);setShowEditor(true);}} onClose={()=>setShowPwd(false)}/>}
+    {/* Staff Editor */}
+    {showEditor&&<StaffEditor staff={staff} onSave={doSaveStaff} onClose={()=>setShowEditor(false)}/>}
+
     {/* Header */}
     <div style={{marginBottom:28}}>
       <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:8}}>
@@ -205,8 +336,10 @@ function App(){
 
     {/* Tabs */}
     <div className="tabs-bar">
-      {[["mark","Mark Attendance"],["history","History"],["summary","Summary"]].map(([id,lbl])=>(
-        <button key={id} className={`tab-btn${tab===id?" active":""}`} onClick={()=>setTab(id)}>{lbl}</button>
+      {[["mark","Mark Attendance"],["history","History"],["summary","Summary"],["admin","⚙ Staff"]].map(([id,lbl])=>(
+        <button key={id} className={`tab-btn${tab===id?" active":""}`} onClick={()=>{
+          if(id==="admin"){setShowPwd(true);}else{setTab(id);}
+        }}>{lbl}</button>
       ))}
     </div>
 
@@ -215,26 +348,26 @@ function App(){
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:8}}>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           <span style={{fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>DATE</span>
-          <input type="date" value={date} onChange={e=>setDate(e.target.value)} max={today()}/>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)} max={today()} style={{width:"auto"}}/>
           {allDates.includes(date)&&<span className="badge-saved">✓ SAVED</span>}
         </div>
         <button className="status-btn" onClick={()=>{
-          const u={};EMPLOYEES.forEach(e=>u[e.id]="Present");
+          const u={};staff.forEach(e=>u[e.id]="Present");
           setDayData(p=>({...p,statuses:{...(p?.statuses||{}),...u}}));
         }}>✓ ALL PRESENT</button>
       </div>
 
       {loading
         ?<div style={{textAlign:"center",padding:"40px 0"}}><span className="spinner"></span><span style={{color:"#6b7280",fontFamily:"'Barlow',sans-serif",fontSize:13}}>Loading...</span></div>
-        :EMPLOYEES.map((emp,i)=>{
+        :staff.map((emp,i)=>{
           const status=statuses[emp.id];
-          const shift=dayShifts[emp.id]||"";
+          const shift=dayShifts[emp.id]||emp.shift||"";
           const note=dayNotes[emp.id]||"";
           const cfg=status?STATUS_CFG[status]:null;
           return(
             <div key={emp.id} className="emp-row" style={{animationDelay:`${i*0.06}s`,borderColor:cfg?`${cfg.color}30`:"rgba(255,255,255,0.06)"}}>
               <div className="row-flex">
-                <div style={{width:40,height:40,borderRadius:8,flexShrink:0,background:cfg?cfg.bg:"rgba(255,255,255,0.06)",border:`1.5px solid ${cfg?cfg.color:"rgba(255,255,255,0.1)"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:cfg?cfg.color:"#6b7280"}}>{emp.avatar}</div>
+                <div style={{width:40,height:40,borderRadius:8,flexShrink:0,background:cfg?cfg.bg:"rgba(255,255,255,0.06)",border:`1.5px solid ${cfg?cfg.color:"rgba(255,255,255,0.1)"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:cfg?cfg.color:"#6b7280"}}>{emp.avatar||makeAvatar(emp.name)}</div>
                 <div style={{flex:"0 0 150px"}}>
                   <div style={{fontSize:16,fontWeight:700}}>{emp.name}</div>
                   <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{emp.role}</div>
@@ -290,13 +423,14 @@ function App(){
     </div>}
 
     {/* SUMMARY TAB */}
-    {tab==="summary"&&<SummaryTab allDates={allDates}/>}
+    {tab==="summary"&&<SummaryTab allDates={allDates} staff={staff}/>}
 
     {toast&&<div className="toast">{toast}</div>}
   </div>);
 }
 
-function SummaryTab({allDates}){
+/* ───── SUMMARY TAB ───── */
+function SummaryTab({allDates,staff}){
   const [allData,setAllData]=useState({});
   const [loading,setLoading]=useState(true);
   useEffect(()=>{
@@ -312,7 +446,7 @@ function SummaryTab({allDates}){
 
   return<div>
     <div style={{marginBottom:16,fontSize:12,color:"#4b5563",fontFamily:"'Barlow',sans-serif",letterSpacing:1}}>INDIVIDUAL OVERVIEW — ALL RECORDED DAYS</div>
-    {EMPLOYEES.map((emp,i)=>{
+    {staff.map((emp,i)=>{
       let p=0,a=0,h=0,l=0,total=0;
       Object.values(allData).forEach(data=>{
         const s=(data?.statuses||{})[emp.id];
@@ -321,7 +455,7 @@ function SummaryTab({allDates}){
       const rate=total?Math.round(p/total*100):null;
       return(
         <div key={emp.id} style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",alignItems:"center",gap:14,animation:"slide-in 0.3s ease both",animationDelay:`${i*0.06}s`}}>
-          <div style={{width:40,height:40,borderRadius:8,flexShrink:0,background:"linear-gradient(135deg,rgba(255,77,0,0.2),rgba(255,140,0,0.2))",border:"1.5px solid rgba(255,77,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#ff8c00"}}>{emp.avatar}</div>
+          <div style={{width:40,height:40,borderRadius:8,flexShrink:0,background:"linear-gradient(135deg,rgba(255,77,0,0.2),rgba(255,140,0,0.2))",border:"1.5px solid rgba(255,77,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#ff8c00"}}>{emp.avatar||makeAvatar(emp.name)}</div>
           <div style={{flex:1}}>
             <div style={{fontSize:16,fontWeight:700}}>{emp.name}</div>
             <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{emp.role}</div>
