@@ -14,7 +14,7 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc, collection, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
     const firebaseConfig = {
       apiKey: "AIzaSyCqvx_WIP4Rgs4YvaAzLRc5WDZOMCmPWNI",
       authDomain: "surya-gym-attendance-267b8.firebaseapp.com",
@@ -42,13 +42,13 @@
     window._saveGymList       = async (list)   => await setDoc(doc(db,"_gyms","registry"),{list});
     window._listenGymList     = (cb)           => onSnapshot(doc(db,"_gyms","registry"),s=>cb(s.exists()?(s.data().list||[]):[]));
     window._savePTClient      = async (id,d,g) => await setDoc(doc(db,P(g,"ptclients"),id),d);
-    window._deletePTClient    = async (id,g)   => { const {deleteDoc:dd}=await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"); await dd(doc(db,P(g,"ptclients"),id)); };
+    window._deletePTClient    = async (id,g)   => { await deleteDoc(doc(db,P(g,"ptclients"),id)); };
     window._listenPTClients   = (g,cb)         => onSnapshot(collection(db,P(g,"ptclients")),s=>cb(s.docs.map(d=>({id:d.id,...d.data()}))));
     window._savePTSession     = async (id,d,g) => await setDoc(doc(db,P(g,"ptsessions"),id),d);
     window._listenPTSessions  = (g,cb)         => onSnapshot(collection(db,P(g,"ptsessions")),s=>cb(s.docs.map(d=>({id:d.id,...d.data()}))));
     // Members
     window._saveMember       = async (id,d,g) => await setDoc(doc(db,P(g,"members"),id),d);
-    window._deleteMember     = async (id,g)   => { const {deleteDoc}=await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"); await deleteDoc(doc(db,P(g,"members"),id)); };
+    window._deleteMember     = async (id,g)   => { await deleteDoc(doc(db,P(g,"members"),id)); };
     window._listenMembers    = (g,cb)         => onSnapshot(collection(db,P(g,"members")),s=>cb(s.docs.map(d=>({id:d.id,...d.data()}))));
     window._saveMemberAttend = async (date,d,g) => await setDoc(doc(db,P(g,"memberattend"),date),d);
     window._loadMemberAttend = async (date,g)   => { const s=await getDoc(doc(db,P(g,"memberattend"),date)); return s.exists()?s.data():null; };
