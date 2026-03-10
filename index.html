@@ -2570,6 +2570,7 @@ function LoginGate({staff, members, onLogin}){
   const [selEmp, setSelEmp] = useState(null);
   const [selMember, setSelMember] = useState(null);
   const [shake, setShake]   = useState(false);
+  const [memberSearch, setMemberSearch] = useState("");
 
   const doShake = () => { setShake(true); setTimeout(()=>setShake(false),500); setPin(""); };
 
@@ -2628,17 +2629,32 @@ function LoginGate({staff, members, onLogin}){
         {/* Member name select */}
         {step==="member-select"&&(
           <div>
-            <div style={{fontSize:13,color:"#00ff87",letterSpacing:2,textAlign:"center",marginBottom:16}}>SELECT YOUR NAME</div>
-            <div style={{maxHeight:260,overflowY:"auto",display:"flex",flexDirection:"column",gap:6}}>
-              {(members||[]).length===0&&<div style={{textAlign:"center",color:"#4b5563",fontSize:13,padding:20}}>No members found</div>}
-              {(members||[]).map(mem=>(
-                <button key={mem.id} className="login-role-btn" style={{border:"1.5px solid rgba(0,255,135,0.2)",background:"rgba(0,255,135,0.04)",marginBottom:0,padding:"10px 14px"}} onClick={()=>{setSelMember(mem);setStep("member-pin");setPin("");}}>
-                  <div style={{width:36,height:36,borderRadius:8,background:"rgba(0,255,135,0.1)",border:"1.5px solid rgba(0,255,135,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:"#00ff87",flexShrink:0}}>{(mem.name||"?")[0].toUpperCase()}</div>
-                  <div><div style={{fontSize:14,color:"#e8edf2"}}>{mem.name}</div><div style={{fontSize:11,color:"rgba(0,255,135,0.5)",fontWeight:400,fontFamily:"'Barlow',sans-serif"}}>{mem.package||"Member"}</div></div>
-                </button>
-              ))}
+            <div style={{fontSize:13,color:"#00ff87",letterSpacing:2,textAlign:"center",marginBottom:12}}>SELECT YOUR NAME</div>
+            <div style={{position:"relative",marginBottom:10}}>
+              <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:14,color:"#4b5563"}}>🔍</span>
+              <input
+                autoFocus
+                type="text"
+                placeholder="Search your name..."
+                value={memberSearch}
+                onChange={e=>setMemberSearch(e.target.value)}
+                style={{width:"100%",boxSizing:"border-box",paddingLeft:32,paddingRight:10,paddingTop:9,paddingBottom:9,background:"rgba(0,255,135,0.05)",border:"1.5px solid rgba(0,255,135,0.2)",borderRadius:8,color:"#e8edf2",fontFamily:"'Barlow',sans-serif",fontSize:14,outline:"none"}}
+              />
+              {memberSearch&&<button onClick={()=>setMemberSearch("")} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#4b5563",cursor:"pointer",fontSize:16,lineHeight:1}}>×</button>}
             </div>
-            <button style={{background:"none",border:"none",color:"#4b5563",cursor:"pointer",width:"100%",marginTop:10,fontFamily:"'Barlow Condensed',sans-serif",fontSize:12,letterSpacing:1}} onClick={()=>setStep("choose")}>← BACK</button>
+            <div style={{maxHeight:230,overflowY:"auto",display:"flex",flexDirection:"column",gap:6}}>
+              {(()=>{
+                const filtered=(members||[]).filter(m=>m.name?.toLowerCase().includes(memberSearch.toLowerCase()));
+                if(!filtered.length) return <div style={{textAlign:"center",color:"#4b5563",fontSize:13,padding:20}}>{memberSearch?"No member found":"No members added yet"}</div>;
+                return filtered.map(mem=>(
+                  <button key={mem.id} className="login-role-btn" style={{border:"1.5px solid rgba(0,255,135,0.2)",background:"rgba(0,255,135,0.04)",marginBottom:0,padding:"10px 14px"}} onClick={()=>{setSelMember(mem);setStep("member-pin");setPin("");setMemberSearch("");}}>
+                    <div style={{width:36,height:36,borderRadius:8,background:"rgba(0,255,135,0.1)",border:"1.5px solid rgba(0,255,135,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:"#00ff87",flexShrink:0}}>{(mem.name||"?")[0].toUpperCase()}</div>
+                    <div><div style={{fontSize:14,color:"#e8edf2"}}>{mem.name}</div><div style={{fontSize:11,color:"rgba(0,255,135,0.5)",fontWeight:400,fontFamily:"'Barlow',sans-serif"}}>{mem.package||"Member"}</div></div>
+                  </button>
+                ));
+              })()}
+            </div>
+            <button style={{background:"none",border:"none",color:"#4b5563",cursor:"pointer",width:"100%",marginTop:10,fontFamily:"'Barlow Condensed',sans-serif",fontSize:12,letterSpacing:1}} onClick={()=>{setStep("choose");setMemberSearch("");}}>← BACK</button>
           </div>
         )}
         {/* Member PIN */}
