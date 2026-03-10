@@ -14,7 +14,7 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc, collection, getDocs, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc, collection, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
     const firebaseConfig = {
       apiKey: "AIzaSyCqvx_WIP4Rgs4YvaAzLRc5WDZOMCmPWNI",
       authDomain: "surya-gym-attendance-267b8.firebaseapp.com",
@@ -46,6 +46,7 @@
     @keyframes toast-in{from{opacity:0;transform:translateY(20px) translateX(-50%)}to{opacity:1;transform:translateY(0) translateX(-50%)}}
     @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
     @keyframes modal-in{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
+    @keyframes clock-pulse{0%,100%{opacity:1}50%{opacity:0.6}}
     .grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(255,77,0,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,77,0,0.04) 1px,transparent 1px);background-size:40px 40px}
     .glow{position:fixed;top:-100px;right:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(255,77,0,0.12) 0%,transparent 70%);pointer-events:none;z-index:0}
     .wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:24px 16px}
@@ -55,10 +56,10 @@
     .btn-Absent.active{background:rgba(255,77,109,0.15);border-color:#ff4d6d;color:#ff4d6d}
     .btn-HalfDay.active{background:rgba(255,214,10,0.15);border-color:#ffd60a;color:#ffd60a}
     .btn-Leave.active{background:rgba(167,139,250,0.15);border-color:#a78bfa;color:#a78bfa}
-    .tab-btn{cursor:pointer;background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;letter-spacing:2px;padding:10px 20px;color:#4b5563;border-bottom:2px solid transparent;transition:all 0.2s;text-transform:uppercase}
+    .tab-btn{cursor:pointer;background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:1.5px;padding:10px 16px;color:#4b5563;border-bottom:2px solid transparent;transition:all 0.2s;text-transform:uppercase}
     .tab-btn.active{color:#ff4d00;border-bottom-color:#ff4d00}
     .tab-btn:hover{color:#e8edf2}
-    .emp-row{animation:slide-in 0.3s ease both;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px 16px;margin-bottom:8px;transition:border-color 0.2s}
+    .emp-row{animation:slide-in 0.3s ease both;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:14px 16px;margin-bottom:10px;transition:border-color 0.2s}
     .emp-row:hover{border-color:rgba(255,77,0,0.25)}
     .save-btn{cursor:pointer;background:linear-gradient(135deg,#ff4d00,#ff8c00);border:none;border-radius:8px;padding:14px 36px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;letter-spacing:3px;color:white;text-transform:uppercase;transition:all 0.2s;box-shadow:0 4px 20px rgba(255,77,0,0.35)}
     .save-btn:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(255,77,0,0.5)}
@@ -66,7 +67,7 @@
     .save-btn.flashing{animation:save-flash 0.6s ease}
     .stat-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px 10px;text-align:center;flex:1;transition:transform 0.2s}
     .stat-card:hover{transform:translateY(-3px)}
-    input[type=date],input[type=text],input[type=password]{background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,77,0,0.3);border-radius:6px;color:#e8edf2;font-family:'Barlow Condensed',sans-serif;font-size:14px;padding:7px 10px;outline:none;cursor:pointer;width:100%}
+    input[type=date],input[type=text],input[type=password]{background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,77,0,0.3);border-radius:6px;color:#e8edf2;font-family:'Barlow Condensed',sans-serif;font-size:14px;padding:7px 10px;outline:none;width:100%}
     input[type=date]{width:auto}
     input[type=text]:focus,input[type=password]:focus,input[type=date]:focus{border-color:#ff4d00}
     select{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#9ca3af;font-family:'Barlow',sans-serif;font-size:12px;padding:7px 8px;outline:none;cursor:pointer;width:100%;border-radius:5px}
@@ -75,8 +76,8 @@
     textarea:focus{border-color:#ff4d00}
     .divider{height:2px;background:linear-gradient(90deg,#ff4d00,#ff8c0060,transparent);margin-bottom:6px}
     .tabs-bar{display:flex;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:24px;flex-wrap:wrap}
-    .stats-bar{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap}
-    .row-flex{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    .stats-bar{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+    .row-flex{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
     .empty{text-align:center;padding:60px 0;color:#374151}
     .badge-saved{font-size:10px;background:rgba(0,255,135,0.1);color:#00ff87;border:1px solid #00ff87;border-radius:4px;padding:3px 8px;letter-spacing:1px}
     .toast{position:fixed;bottom:32px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#ff4d00,#ff8c00);color:white;border-radius:8px;padding:12px 28px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:2px;box-shadow:0 8px 30px rgba(255,77,0,0.5);animation:toast-in 0.3s ease;z-index:100;white-space:nowrap}
@@ -86,22 +87,34 @@
     .hist-card:hover{border-color:rgba(255,77,0,0.3)}
     .spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,0.15);border-top-color:#ff4d00;border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block;vertical-align:middle;margin-right:8px}
     .sync-dot{width:7px;height:7px;border-radius:50%;background:#00ff87;display:inline-block;margin-right:5px;box-shadow:0 0 5px #00ff87}
-
-    /* Modal */
-    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
     .modal{background:#0d1117;border:1px solid rgba(255,77,0,0.3);border-radius:16px;padding:28px;width:100%;max-width:480px;animation:modal-in 0.25s ease;max-height:90vh;overflow-y:auto}
     .modal-title{font-size:22px;font-weight:900;letter-spacing:2px;text-transform:uppercase;margin-bottom:20px;color:#ff4d00}
     .field-label{font-size:11px;color:#6b7280;letter-spacing:1px;margin-bottom:6px;font-family:'Barlow',sans-serif;text-transform:uppercase}
     .field-group{margin-bottom:14px}
     .staff-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:14px;margin-bottom:10px}
     .icon-btn{background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:4px;font-size:14px;transition:all 0.15s}
-    .icon-btn:hover{background:rgba(255,255,255,0.08)}
     .del-btn{color:#ff4d6d}
     .del-btn:hover{background:rgba(255,77,109,0.1)}
     .add-staff-btn{cursor:pointer;background:rgba(255,77,0,0.1);border:1.5px dashed rgba(255,77,0,0.4);border-radius:8px;padding:12px;width:100%;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:2px;color:#ff8c00;text-transform:uppercase;transition:all 0.2s;margin-bottom:16px}
-    .add-staff-btn:hover{background:rgba(255,77,0,0.2);border-color:#ff4d00}
+    .add-staff-btn:hover{background:rgba(255,77,0,0.2)}
     .err-msg{color:#ff4d6d;font-size:12px;font-family:'Barlow',sans-serif;margin-top:6px}
-    .pwd-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px;text-align:center}
+
+    /* Clock */
+    .live-clock{background:rgba(255,255,255,0.03);border:1px solid rgba(255,77,0,0.2);border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+    .clock-time{font-size:36px;font-weight:900;letter-spacing:3px;color:#ff8c00;font-family:'Barlow Condensed',sans-serif;animation:clock-pulse 2s ease-in-out infinite}
+    .clock-date{font-size:13px;color:#6b7280;font-family:'Barlow',sans-serif}
+    .clock-label{font-size:9px;color:#4b5563;letter-spacing:2px;text-transform:uppercase}
+
+    /* Punch buttons */
+    .punch-in-btn{cursor:pointer;background:rgba(0,255,135,0.12);border:1.5px solid #00ff87;border-radius:6px;padding:6px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;color:#00ff87;transition:all 0.15s;white-space:nowrap}
+    .punch-in-btn:hover{background:rgba(0,255,135,0.22)}
+    .punch-out-btn{cursor:pointer;background:rgba(255,77,109,0.12);border:1.5px solid #ff4d6d;border-radius:6px;padding:6px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;color:#ff4d6d;transition:all 0.15s;white-space:nowrap}
+    .punch-out-btn:hover{background:rgba(255,77,109,0.22)}
+    .punch-time{font-size:11px;font-family:'Barlow',sans-serif;color:#6b7280}
+    .punch-active{font-size:10px;background:rgba(0,255,135,0.08);border:1px solid rgba(0,255,135,0.2);border-radius:4px;padding:3px 8px;color:#00ff87;font-family:'Barlow',sans-serif}
+    .duration{font-size:11px;color:#ffd60a;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px}
+    .cancel-btn{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:2px;color:#6b7280;cursor:pointer;flex:1}
   </style>
 </head>
 <body>
@@ -129,15 +142,68 @@ function today(){ return new Date().toISOString().split("T")[0]; }
 function fmtDate(d){ return new Date(d+"T00:00:00").toLocaleDateString("en-IN",{weekday:"short",day:"2-digit",month:"short",year:"numeric"}); }
 function makeAvatar(name){ return name.split(" ").map(w=>w[0]||"").join("").toUpperCase().slice(0,2); }
 function makeId(){ return "emp"+Date.now(); }
+function nowTime(){
+  const n=new Date();
+  return n.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:true});
+}
+function nowTimeShort(){
+  const n=new Date();
+  return n.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",hour12:true});
+}
+function calcDuration(punchIn){
+  if(!punchIn) return null;
+  const [time,ampm]=punchIn.split(" ");
+  const [h,m,s]=(time||"00:00:00").split(":").map(Number);
+  let hrs=h; if(ampm==="PM"&&h!==12)hrs+=12; if(ampm==="AM"&&h===12)hrs=0;
+  const inMs=new Date(); inMs.setHours(hrs,m,s||0,0);
+  const diffMs=Date.now()-inMs.getTime();
+  if(diffMs<0) return null;
+  const totalMins=Math.floor(diffMs/60000);
+  const dh=Math.floor(totalMins/60), dm=totalMins%60;
+  return dh>0?`${dh}h ${dm}m`:`${dm}m`;
+}
 
-/* ───── PASSWORD MODAL ───── */
-function PasswordModal({onSuccess, onClose}){
+/* ── LIVE CLOCK ── */
+function LiveClock(){
+  const [time,setTime]=useState(nowTime());
+  useEffect(()=>{
+    const t=setInterval(()=>setTime(nowTime()),1000);
+    return()=>clearInterval(t);
+  },[]);
+  const now=new Date();
+  const dateStr=now.toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
+  return(
+    <div className="live-clock">
+      <div>
+        <div className="clock-label">LIVE TIME</div>
+        <div className="clock-time">{time}</div>
+        <div className="clock-date">{dateStr}</div>
+      </div>
+      <div style={{textAlign:"right"}}>
+        <div className="clock-label">STATUS</div>
+        <div style={{marginTop:4}}><span className="sync-dot"></span><span style={{fontSize:11,color:"#00ff87",fontFamily:"'Barlow',sans-serif"}}>LIVE SYNC ON</span></div>
+        <div style={{fontSize:11,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginTop:4}}>Surya Gym 2.0</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── DURATION TICKER ── */
+function DurationTicker({punchIn}){
+  const [dur,setDur]=useState(calcDuration(punchIn));
+  useEffect(()=>{
+    const t=setInterval(()=>setDur(calcDuration(punchIn)),30000);
+    return()=>clearInterval(t);
+  },[punchIn]);
+  if(!dur) return null;
+  return <span className="duration">⏱ {dur}</span>;
+}
+
+/* ── PASSWORD MODAL ── */
+function PasswordModal({onSuccess,onClose}){
   const [pwd,setPwd]=useState("");
   const [err,setErr]=useState("");
-  const check=()=>{
-    if(pwd===ADMIN_PASSWORD){onSuccess();}
-    else{setErr("Wrong password. Try again.");setPwd("");}
-  };
+  const check=()=>{ if(pwd===ADMIN_PASSWORD){onSuccess();}else{setErr("Wrong password!");setPwd("");} };
   return(
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e=>e.stopPropagation()}>
@@ -149,89 +215,85 @@ function PasswordModal({onSuccess, onClose}){
         </div>
         <div style={{display:"flex",gap:10,marginTop:8}}>
           <button className="save-btn" style={{flex:1,padding:"12px"}} onClick={check}>UNLOCK</button>
-          <button onClick={onClose} style={{flex:1,padding:"12px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,color:"#6b7280",cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,letterSpacing:2}}>CANCEL</button>
+          <button className="cancel-btn" onClick={onClose}>CANCEL</button>
         </div>
       </div>
     </div>
   );
 }
 
-/* ───── STAFF EDITOR MODAL ───── */
-function StaffEditor({staff, onSave, onClose}){
+/* ── STAFF EDITOR ── */
+function StaffEditor({staff,onSave,onClose}){
   const [list,setList]=useState(staff.map(e=>({...e})));
   const [saving,setSaving]=useState(false);
-
-  const update=(id,field,val)=>setList(p=>p.map(e=>e.id===id?{...e,[field]:val,avatar:field==="name"?makeAvatar(val):e.avatar}:e));
-  const addStaff=()=>setList(p=>[...p,{id:makeId(),name:"",role:"",avatar:"",shift:SHIFTS[0]}]);
-  const removeStaff=(id)=>setList(p=>p.filter(e=>e.id!==id));
-
+  const upd=(id,f,v)=>setList(p=>p.map(e=>e.id===id?{...e,[f]:v,avatar:f==="name"?makeAvatar(v):e.avatar}:e));
   const doSave=async()=>{
     const valid=list.filter(e=>e.name.trim()&&e.role.trim());
-    if(valid.length===0){alert("Add at least one staff member!");return;}
-    setSaving(true);
-    await onSave(valid);
-    setSaving(false);
-    onClose();
+    if(!valid.length){alert("Add at least one staff!");return;}
+    setSaving(true); await onSave(valid); setSaving(false); onClose();
   };
-
   return(
     <div className="modal-overlay">
       <div className="modal">
         <div className="modal-title">✏️ Edit Staff</div>
-
         {list.map((emp,i)=>(
           <div key={emp.id} className="staff-card">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <div style={{fontSize:13,fontWeight:700,color:"#ff8c00",letterSpacing:1}}>STAFF #{i+1}</div>
-              <button className="icon-btn del-btn" onClick={()=>removeStaff(emp.id)}>🗑 Remove</button>
+              <button className="icon-btn del-btn" onClick={()=>setList(p=>p.filter(e=>e.id!==emp.id))}>🗑 Remove</button>
             </div>
             <div className="field-group">
               <div className="field-label">Full Name</div>
-              <input type="text" placeholder="e.g. Sai Vaidya" value={emp.name} onChange={e=>update(emp.id,"name",e.target.value)}/>
+              <input type="text" placeholder="e.g. Sai Vaidya" value={emp.name} onChange={e=>upd(emp.id,"name",e.target.value)}/>
             </div>
             <div className="field-group">
               <div className="field-label">Role</div>
-              <input type="text" placeholder="e.g. Trainer" value={emp.role} onChange={e=>update(emp.id,"role",e.target.value)}/>
+              <input type="text" placeholder="e.g. Trainer" value={emp.role} onChange={e=>upd(emp.id,"role",e.target.value)}/>
             </div>
             <div className="field-group">
-              <div className="field-label">Default Shift</div>
-              <select value={emp.shift} onChange={e=>update(emp.id,"shift",e.target.value)}>
+              <div className="field-label">Default Shift Timing</div>
+              <select value={emp.shift} onChange={e=>upd(emp.id,"shift",e.target.value)}>
                 {SHIFTS.map(s=><option key={s} value={s}>{s}</option>)}
               </select>
             </div>
           </div>
         ))}
-
-        <button className="add-staff-btn" onClick={addStaff}>+ ADD NEW STAFF</button>
-
+        <button className="add-staff-btn" onClick={()=>setList(p=>[...p,{id:makeId(),name:"",role:"",avatar:"",shift:SHIFTS[0]}])}>+ ADD NEW STAFF</button>
         <div style={{display:"flex",gap:10}}>
           <button className="save-btn" style={{flex:1,padding:"12px"}} onClick={doSave} disabled={saving}>
             {saving?<><span className="spinner"></span>SAVING...</>:"SAVE CHANGES"}
           </button>
-          <button onClick={onClose} style={{flex:1,padding:"12px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,color:"#6b7280",cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,letterSpacing:2}}>CANCEL</button>
+          <button className="cancel-btn" onClick={onClose}>CANCEL</button>
         </div>
       </div>
     </div>
   );
 }
 
-/* ───── MAIN APP ───── */
+/* ── MAIN APP ── */
 function App(){
-  const [fbReady,   setFbReady]   = useState(!!window._fbReady);
-  const [date,      setDate]      = useState(today());
-  const [dayData,   setDayData]   = useState(null);
-  const [allDates,  setAllDates]  = useState([]);
-  const [staff,     setStaff]     = useState(DEFAULT_STAFF);
-  const [tab,       setTab]       = useState("mark");
-  const [saving,    setSaving]    = useState(false);
-  const [loading,   setLoading]   = useState(true);
-  const [flash,     setFlash]     = useState(false);
-  const [editNote,  setEditNote]  = useState(null);
-  const [toast,     setToast]     = useState(null);
-  const [showPwd,   setShowPwd]   = useState(false);
-  const [showEditor,setShowEditor]= useState(false);
+  const [fbReady,    setFbReady]    = useState(!!window._fbReady);
+  const [date,       setDate]       = useState(today());
+  const [dayData,    setDayData]    = useState(null);
+  const [allDates,   setAllDates]   = useState([]);
+  const [staff,      setStaff]      = useState(DEFAULT_STAFF);
+  const [tab,        setTab]        = useState("mark");
+  const [saving,     setSaving]     = useState(false);
+  const [loading,    setLoading]    = useState(true);
+  const [flash,      setFlash]      = useState(false);
+  const [editNote,   setEditNote]   = useState(null);
+  const [toast,      setToast]      = useState(null);
+  const [showPwd,    setShowPwd]    = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
+  const [ticker,     setTicker]     = useState(0);
   const unsubRef  = useRef(null);
   const unsubSRef = useRef(null);
+
+  // Ticker for duration updates
+  useEffect(()=>{
+    const t=setInterval(()=>setTicker(x=>x+1),30000);
+    return()=>clearInterval(t);
+  },[]);
 
   useEffect(()=>{
     if(window._fbReady){setFbReady(true);return;}
@@ -242,12 +304,9 @@ function App(){
 
   useEffect(()=>{
     if(!fbReady)return;
-    window._loadAllDates().then(dates=>setAllDates(dates.sort((a,b)=>b.localeCompare(a))));
-    // Listen to staff changes in real time
-    unsubSRef.current=window._listenStaff(data=>{
-      if(data&&data.length>0)setStaff(data);
-    });
-    return()=>{if(unsubSRef.current)unsubSRef.current();};
+    window._loadAllDates().then(d=>setAllDates(d.sort((a,b)=>b.localeCompare(a))));
+    unsubSRef.current=window._listenStaff(data=>{ if(data&&data.length>0)setStaff(data); });
+    return()=>{ if(unsubSRef.current)unsubSRef.current(); };
   },[fbReady]);
 
   useEffect(()=>{
@@ -255,16 +314,34 @@ function App(){
     setLoading(true);
     if(unsubRef.current)unsubRef.current();
     unsubRef.current=window._listenAttendance(date,data=>{
-      setDayData(data||{statuses:{},shifts:Object.fromEntries(staff.map(e=>[e.id,e.shift])),notes:{}});
+      setDayData(data||{statuses:{},shifts:Object.fromEntries(staff.map(e=>[e.id,e.shift])),notes:{},punchIn:{},punchOut:{}});
       setLoading(false);
     });
-    return()=>{if(unsubRef.current)unsubRef.current();};
+    return()=>{ if(unsubRef.current)unsubRef.current(); };
   },[fbReady,date]);
 
-  const statuses  = dayData?.statuses||{};
-  const dayShifts = dayData?.shifts||Object.fromEntries(staff.map(e=>[e.id,e.shift]));
-  const dayNotes  = dayData?.notes||{};
+  const statuses  = dayData?.statuses ||{};
+  const dayShifts = dayData?.shifts   ||Object.fromEntries(staff.map(e=>[e.id,e.shift]));
+  const dayNotes  = dayData?.notes    ||{};
+  const punchIn   = dayData?.punchIn  ||{};
+  const punchOut  = dayData?.punchOut ||{};
+
   const upd=(field,id,val)=>setDayData(p=>({...p,[field]:{...(p?.[field]||{}),[id]:val}}));
+
+  const doPunchIn=(id)=>{
+    if(punchIn[id]){return;}
+    const t=nowTimeShort();
+    upd("punchIn",id,t);
+    upd("statuses",id,"Present");
+    showToast(`✓ ${staff.find(e=>e.id===id)?.name} punched in at ${t}`);
+  };
+
+  const doPunchOut=(id)=>{
+    if(!punchIn[id]||punchOut[id]){return;}
+    const t=nowTimeShort();
+    upd("punchOut",id,t);
+    showToast(`✓ ${staff.find(e=>e.id===id)?.name} punched out at ${t}`);
+  };
 
   const doSave=async()=>{
     setSaving(true);
@@ -277,12 +354,7 @@ function App(){
     setSaving(false);
   };
 
-  const doSaveStaff=async(newStaff)=>{
-    await window._saveStaff(newStaff);
-    setStaff(newStaff);
-    showToast("✓ Staff updated on all phones!");
-  };
-
+  const doSaveStaff=async(s)=>{ await window._saveStaff(s); setStaff(s); showToast("✓ Staff updated on all phones!"); };
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(null),3000);};
 
   const stats={
@@ -295,32 +367,27 @@ function App(){
 
   if(!fbReady)return(
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"80vh",gap:16}}>
-      <div style={{fontSize:48}}>🔥</div>
+      <div style={{fontSize:48}}>☀️</div>
       <div style={{fontSize:22,fontWeight:900,letterSpacing:3}}>SURYA GYM 2.0</div>
       <div><span className="spinner"></span><span style={{color:"#6b7280",fontSize:13,fontFamily:"'Barlow',sans-serif"}}>Connecting...</span></div>
     </div>
   );
 
   return(<div>
-    {/* Password Modal */}
     {showPwd&&<PasswordModal onSuccess={()=>{setShowPwd(false);setShowEditor(true);}} onClose={()=>setShowPwd(false)}/>}
-    {/* Staff Editor */}
     {showEditor&&<StaffEditor staff={staff} onSave={doSaveStaff} onClose={()=>setShowEditor(false)}/>}
 
     {/* Header */}
-    <div style={{marginBottom:28}}>
+    <div style={{marginBottom:20}}>
       <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:8}}>
         <div style={{width:54,height:54,flexShrink:0,animation:"flame 3s ease-in-out infinite"}}>
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="54" height="54">
             <defs>
               <radialGradient id="sunGrad" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#fff7a0"/>
-                <stop offset="40%" stopColor="#ffb700"/>
-                <stop offset="100%" stopColor="#ff4d00"/>
+                <stop offset="0%" stopColor="#fff7a0"/><stop offset="40%" stopColor="#ffb700"/><stop offset="100%" stopColor="#ff4d00"/>
               </radialGradient>
               <radialGradient id="coreGrad" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#ffffff"/>
-                <stop offset="100%" stopColor="#ffd60a"/>
+                <stop offset="0%" stopColor="#ffffff"/><stop offset="100%" stopColor="#ffd60a"/>
               </radialGradient>
               <filter id="glowF"><feGaussianBlur stdDeviation="2.5" result="cb"/><feMerge><feMergeNode in="cb"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
             </defs>
@@ -341,22 +408,25 @@ function App(){
         </div>
         <div>
           <div style={{fontSize:11,letterSpacing:4,color:"#ff4d00",fontWeight:700,textTransform:"uppercase"}}>Surya Gym 2.0</div>
-          <div style={{fontSize:30,fontWeight:900,letterSpacing:1,lineHeight:1.1,textTransform:"uppercase"}}>Staff Attendance</div>
+          <div style={{fontSize:28,fontWeight:900,letterSpacing:1,lineHeight:1.1,textTransform:"uppercase"}}>Staff Attendance</div>
         </div>
-        <div style={{marginLeft:"auto",textAlign:"right"}}>
-          <div style={{fontSize:11,color:"#4b5563",letterSpacing:2}}>TODAY</div>
-          <div style={{fontSize:13,color:"#9ca3af",fontFamily:"'Barlow',sans-serif"}}>{fmtDate(today())}</div>
-          <div style={{marginTop:4}}><span className="sync-dot"></span><span style={{fontSize:10,color:"#00ff87",fontFamily:"'Barlow',sans-serif"}}>LIVE SYNC ON</span></div>
+        <div style={{marginLeft:"auto",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+          <button onClick={()=>setShowPwd(true)} style={{cursor:"pointer",background:"linear-gradient(135deg,rgba(255,77,0,0.2),rgba(255,140,0,0.2))",border:"1.5px solid rgba(255,77,0,0.5)",borderRadius:8,padding:"8px 14px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:13,letterSpacing:2,color:"#ff8c00",textTransform:"uppercase",transition:"all 0.2s"}}>
+            ✏️ EDIT STAFF
+          </button>
         </div>
       </div>
       <div className="divider"/>
     </div>
 
+    {/* Live Clock */}
+    <LiveClock/>
+
     {/* Stats */}
     <div className="stats-bar">
       {[["Total",stats.total,"#e8edf2"],["Present",stats.present,"#00ff87"],["Absent",stats.absent,"#ff4d6d"],["Half Day",stats.halfDay,"#ffd60a"],["On Leave",stats.leave,"#a78bfa"],["Marked",`${stats.marked}/${stats.total}`,"#ff8c00"]].map(([l,v,c])=>(
         <div key={l} className="stat-card">
-          <div style={{fontSize:24,fontWeight:900,color:c,lineHeight:1}}>{v}</div>
+          <div style={{fontSize:22,fontWeight:900,color:c,lineHeight:1}}>{v}</div>
           <div style={{fontSize:9,color:"#6b7280",letterSpacing:1,marginTop:3,fontFamily:"'Barlow',sans-serif",textTransform:"uppercase"}}>{l}</div>
         </div>
       ))}
@@ -364,16 +434,14 @@ function App(){
 
     {/* Tabs */}
     <div className="tabs-bar">
-      {[["mark","Mark Attendance"],["history","History"],["summary","Summary"],["admin","⚙ Staff"]].map(([id,lbl])=>(
-        <button key={id} className={`tab-btn${tab===id?" active":""}`} onClick={()=>{
-          if(id==="admin"){setShowPwd(true);}else{setTab(id);}
-        }}>{lbl}</button>
+      {[["mark","Mark Attendance"],["history","History"],["summary","Summary"]].map(([id,lbl])=>(
+        <button key={id} className={`tab-btn${tab===id?" active":""}`} onClick={()=>setTab(id)}>{lbl}</button>
       ))}
     </div>
 
     {/* MARK TAB */}
     {tab==="mark"&&<div>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:8}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           <span style={{fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>DATE</span>
           <input type="date" value={date} onChange={e=>setDate(e.target.value)} max={today()} style={{width:"auto"}}/>
@@ -388,17 +456,22 @@ function App(){
       {loading
         ?<div style={{textAlign:"center",padding:"40px 0"}}><span className="spinner"></span><span style={{color:"#6b7280",fontFamily:"'Barlow',sans-serif",fontSize:13}}>Loading...</span></div>
         :staff.map((emp,i)=>{
-          const status=statuses[emp.id];
-          const shift=dayShifts[emp.id]||emp.shift||"";
-          const note=dayNotes[emp.id]||"";
-          const cfg=status?STATUS_CFG[status]:null;
+          const status  = statuses[emp.id];
+          const shift   = dayShifts[emp.id]||emp.shift||"";
+          const note    = dayNotes[emp.id]||"";
+          const pinTime = punchIn[emp.id];
+          const poutTime= punchOut[emp.id];
+          const cfg     = status?STATUS_CFG[status]:null;
+          const isToday = date===today();
           return(
             <div key={emp.id} className="emp-row" style={{animationDelay:`${i*0.06}s`,borderColor:cfg?`${cfg.color}30`:"rgba(255,255,255,0.06)"}}>
+              {/* Top row */}
               <div className="row-flex">
-                <div style={{width:40,height:40,borderRadius:8,flexShrink:0,background:cfg?cfg.bg:"rgba(255,255,255,0.06)",border:`1.5px solid ${cfg?cfg.color:"rgba(255,255,255,0.1)"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:cfg?cfg.color:"#6b7280"}}>{emp.avatar||makeAvatar(emp.name)}</div>
-                <div style={{flex:"0 0 150px"}}>
+                <div style={{width:42,height:42,borderRadius:8,flexShrink:0,background:cfg?cfg.bg:"rgba(255,255,255,0.06)",border:`1.5px solid ${cfg?cfg.color:"rgba(255,255,255,0.1)"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:cfg?cfg.color:"#6b7280"}}>{emp.avatar||makeAvatar(emp.name)}</div>
+                <div style={{flex:"0 0 140px"}}>
                   <div style={{fontSize:16,fontWeight:700}}>{emp.name}</div>
                   <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{emp.role}</div>
+                  <div style={{fontSize:10,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginTop:2}}>⏰ {shift}</div>
                 </div>
                 <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                   {["Present","Absent","Half Day","Leave"].map(s=>(
@@ -407,13 +480,52 @@ function App(){
                     </button>
                   ))}
                 </div>
-                <div style={{flex:"0 0 170px",marginLeft:"auto"}}>
+                <div style={{flex:"0 0 160px",marginLeft:"auto"}}>
                   <select value={shift} onChange={e=>upd("shifts",emp.id,e.target.value)}>
                     <option value="">— Shift —</option>
                     {SHIFTS.map(s=><option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
+
+              {/* Punch In/Out Row */}
+              <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.05)",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                  {!pinTime
+                    ?<button className="punch-in-btn" onClick={()=>isToday&&doPunchIn(emp.id)} style={{opacity:isToday?1:0.4,cursor:isToday?"pointer":"not-allowed"}}>
+                       🟢 PUNCH IN
+                     </button>
+                    :<span className="punch-active">🟢 IN: {pinTime}</span>
+                  }
+                  {pinTime&&!poutTime
+                    ?<button className="punch-out-btn" onClick={()=>doPunchOut(emp.id)}>🔴 PUNCH OUT</button>
+                    :pinTime&&poutTime
+                    ?<span style={{fontSize:11,color:"#ff4d6d",fontFamily:"'Barlow',sans-serif",background:"rgba(255,77,109,0.08)",border:"1px solid rgba(255,77,109,0.2)",borderRadius:4,padding:"3px 8px"}}>🔴 OUT: {poutTime}</span>
+                    :null
+                  }
+                </div>
+                <div style={{display:"flex",gap:10,alignItems:"center",marginLeft:"auto",flexWrap:"wrap"}}>
+                  {pinTime&&!poutTime&&<DurationTicker key={ticker} punchIn={pinTime}/>}
+                  {pinTime&&poutTime&&(()=>{
+                    // calc total hours worked
+                    const parseT=(t)=>{
+                      if(!t)return 0;
+                      const [time,ampm]=t.split(" ");
+                      const [h,m]=(time||"00:00").split(":").map(Number);
+                      let hrs=h; if(ampm==="PM"&&h!==12)hrs+=12; if(ampm==="AM"&&h===12)hrs=0;
+                      return hrs*60+m;
+                    };
+                    const diff=parseT(poutTime)-parseT(pinTime);
+                    if(diff>0){
+                      const dh=Math.floor(diff/60),dm=diff%60;
+                      return <span className="duration">✅ {dh>0?`${dh}h `:""}${dm}m worked</span>;
+                    }
+                    return null;
+                  })()}
+                </div>
+              </div>
+
+              {/* Note row */}
               {editNote===emp.id
                 ?<div style={{marginTop:8}}><textarea rows={2} placeholder="Add note..." value={note} onChange={e=>upd("notes",emp.id,e.target.value)} onBlur={()=>setEditNote(null)} autoFocus/></div>
                 :<div style={{marginTop:6,display:"flex",alignItems:"center",gap:8}}>
@@ -457,48 +569,59 @@ function App(){
   </div>);
 }
 
-/* ───── SUMMARY TAB ───── */
+/* ── SUMMARY TAB ── */
 function SummaryTab({allDates,staff}){
   const [allData,setAllData]=useState({});
   const [loading,setLoading]=useState(true);
   useEffect(()=>{
-    if(allDates.length===0){setLoading(false);return;}
+    if(!allDates.length){setLoading(false);return;}
     Promise.all(allDates.map(d=>window._loadAttendance(d).then(data=>[d,data]))).then(results=>{
-      const map={};
-      results.forEach(([d,data])=>{if(data)map[d]=data;});
+      const map={};results.forEach(([d,data])=>{if(data)map[d]=data;});
       setAllData(map);setLoading(false);
     });
   },[allDates]);
 
-  if(loading)return<div style={{textAlign:"center",padding:"40px 0"}}><span className="spinner"></span><span style={{color:"#6b7280",fontFamily:"'Barlow',sans-serif",fontSize:13}}>Loading summary...</span></div>;
+  if(loading)return<div style={{textAlign:"center",padding:"40px 0"}}><span className="spinner"></span><span style={{color:"#6b7280",fontFamily:"'Barlow',sans-serif",fontSize:13}}>Loading...</span></div>;
 
   return<div>
     <div style={{marginBottom:16,fontSize:12,color:"#4b5563",fontFamily:"'Barlow',sans-serif",letterSpacing:1}}>INDIVIDUAL OVERVIEW — ALL RECORDED DAYS</div>
     {staff.map((emp,i)=>{
       let p=0,a=0,h=0,l=0,total=0;
+      let totalMinsWorked=0;
       Object.values(allData).forEach(data=>{
         const s=(data?.statuses||{})[emp.id];
+        const pin=(data?.punchIn||{})[emp.id];
+        const pout=(data?.punchOut||{})[emp.id];
         if(s){total++;if(s==="Present")p++;else if(s==="Absent")a++;else if(s==="Half Day")h++;else if(s==="Leave")l++;}
+        if(pin&&pout){
+          const parseT=(t)=>{const[time,ampm]=t.split(" ");const[hr,mn]=(time||"00:00").split(":").map(Number);let hrs=hr;if(ampm==="PM"&&hr!==12)hrs+=12;if(ampm==="AM"&&hr===12)hrs=0;return hrs*60+mn;};
+          const diff=parseT(pout)-parseT(pin);
+          if(diff>0)totalMinsWorked+=diff;
+        }
       });
       const rate=total?Math.round(p/total*100):null;
+      const avgHrs=p>0?Math.round(totalMinsWorked/p):0;
       return(
-        <div key={emp.id} style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",alignItems:"center",gap:14,animation:"slide-in 0.3s ease both",animationDelay:`${i*0.06}s`}}>
-          <div style={{width:40,height:40,borderRadius:8,flexShrink:0,background:"linear-gradient(135deg,rgba(255,77,0,0.2),rgba(255,140,0,0.2))",border:"1.5px solid rgba(255,77,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#ff8c00"}}>{emp.avatar||makeAvatar(emp.name)}</div>
-          <div style={{flex:1}}>
-            <div style={{fontSize:16,fontWeight:700}}>{emp.name}</div>
-            <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{emp.role}</div>
-            <div style={{display:"flex",gap:12,marginTop:4}}>
-              {[["P",p,"#00ff87"],["A",a,"#ff4d6d"],["H",h,"#ffd60a"],["L",l,"#a78bfa"]].map(([lbl,val,c])=>(
-                <span key={lbl} style={{fontSize:11,fontFamily:"'Barlow',sans-serif"}}><span style={{color:c,fontWeight:700}}>{val}</span> <span style={{color:"#4b5563"}}>{lbl}</span></span>
-              ))}
-              <span style={{fontSize:11,color:"#4b5563",fontFamily:"'Barlow',sans-serif"}}>/ {total} days</span>
+        <div key={emp.id} style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:10,padding:"14px 18px",marginBottom:8,animation:"slide-in 0.3s ease both",animationDelay:`${i*0.06}s`}}>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            <div style={{width:40,height:40,borderRadius:8,flexShrink:0,background:"linear-gradient(135deg,rgba(255,77,0,0.2),rgba(255,140,0,0.2))",border:"1.5px solid rgba(255,77,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#ff8c00"}}>{emp.avatar||makeAvatar(emp.name)}</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:16,fontWeight:700}}>{emp.name}</div>
+              <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{emp.role} · {emp.shift}</div>
+              <div style={{display:"flex",gap:12,marginTop:4,flexWrap:"wrap"}}>
+                {[["P",p,"#00ff87"],["A",a,"#ff4d6d"],["H",h,"#ffd60a"],["L",l,"#a78bfa"]].map(([lbl,val,c])=>(
+                  <span key={lbl} style={{fontSize:11,fontFamily:"'Barlow',sans-serif"}}><span style={{color:c,fontWeight:700}}>{val}</span> <span style={{color:"#4b5563"}}>{lbl}</span></span>
+                ))}
+                <span style={{fontSize:11,color:"#4b5563",fontFamily:"'Barlow',sans-serif"}}>/ {total} days</span>
+                {avgHrs>0&&<span style={{fontSize:11,color:"#ffd60a",fontFamily:"'Barlow',sans-serif"}}>⏱ avg {Math.floor(avgHrs/60)}h{avgHrs%60>0?` ${avgHrs%60}m`:""}/day</span>}
+              </div>
             </div>
-          </div>
-          <div style={{textAlign:"right"}}>
-            {rate!==null
-              ?<><div style={{fontSize:26,fontWeight:900,color:rate>=80?"#00ff87":rate>=60?"#ffd60a":"#ff4d6d"}}>{rate}%</div><div style={{fontSize:9,color:"#4b5563",letterSpacing:1}}>ATTEND RATE</div></>
-              :<div style={{fontSize:12,color:"#374151",fontFamily:"'Barlow',sans-serif"}}>No data</div>
-            }
+            <div style={{textAlign:"right"}}>
+              {rate!==null
+                ?<><div style={{fontSize:26,fontWeight:900,color:rate>=80?"#00ff87":rate>=60?"#ffd60a":"#ff4d6d"}}>{rate}%</div><div style={{fontSize:9,color:"#4b5563",letterSpacing:1}}>ATTEND RATE</div></>
+                :<div style={{fontSize:12,color:"#374151",fontFamily:"'Barlow',sans-serif"}}>No data</div>
+              }
+            </div>
           </div>
         </div>
       );
