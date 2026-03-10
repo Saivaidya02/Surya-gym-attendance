@@ -251,10 +251,8 @@ function StaffEditor({staff,onSave,onClose}){
               <input type="text" placeholder="e.g. Trainer" value={emp.role} onChange={e=>upd(emp.id,"role",e.target.value)}/>
             </div>
             <div className="field-group">
-              <div className="field-label">Default Shift Timing</div>
-              <select value={emp.shift} onChange={e=>upd(emp.id,"shift",e.target.value)}>
-                {SHIFTS.map(s=><option key={s} value={s}>{s}</option>)}
-              </select>
+              <div className="field-label">Default Shift Timing (type freely)</div>
+              <input type="text" placeholder="e.g. 6AM–10AM or 5PM–9PM" value={emp.shift} onChange={e=>upd(emp.id,"shift",e.target.value)}/>
             </div>
           </div>
         ))}
@@ -480,11 +478,8 @@ function App(){
                     </button>
                   ))}
                 </div>
-                <div style={{flex:"0 0 160px",marginLeft:"auto"}}>
-                  <select value={shift} onChange={e=>upd("shifts",emp.id,e.target.value)}>
-                    <option value="">— Shift —</option>
-                    {SHIFTS.map(s=><option key={s} value={s}>{s}</option>)}
-                  </select>
+                <div style={{flex:"0 0 170px",marginLeft:"auto"}}>
+                  <input type="text" placeholder="Shift timing..." value={shift} onChange={e=>upd("shifts",emp.id,e.target.value)} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:5,color:"#9ca3af",fontFamily:"'Barlow',sans-serif",fontSize:12,padding:"7px 8px",outline:"none",width:"100%"}}/>
                 </div>
               </div>
 
