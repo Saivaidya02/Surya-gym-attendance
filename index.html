@@ -25,15 +25,33 @@
     };
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
-    window._saveAttendance   = async (k,d) => await setDoc(doc(db,"attendance",k),d);
-    window._loadAttendance   = async (k)   => { const s=await getDoc(doc(db,"attendance",k)); return s.exists()?s.data():null; };
-    window._listenAttendance = (k,cb)      => onSnapshot(doc(db,"attendance",k),s=>cb(s.exists()?s.data():null));
-    window._loadAllDates     = async ()    => { const s=await getDocs(collection(db,"attendance")); return s.docs.map(d=>d.id); };
-    window._saveStaff        = async (s)   => await setDoc(doc(db,"config","staff"),{list:s});
-    window._listenStaff      = (cb)        => onSnapshot(doc(db,"config","staff"),s=>cb(s.exists()?s.data().list:null));
+    // Multi-gym: prefix = gymId, e.g. "gym1_attendance_2024-01-01"
+    const P = (g,col) => g+"_"+col; // path helper
+    window._saveAttendance    = async (k,d,g)  => await setDoc(doc(db,P(g,"attendance"),k),d);
+    window._loadAttendance    = async (k,g)    => { const s=await getDoc(doc(db,P(g,"attendance"),k)); return s.exists()?s.data():null; };
+    window._listenAttendance  = (k,g,cb)       => onSnapshot(doc(db,P(g,"attendance"),k),s=>cb(s.exists()?s.data():null));
+    window._loadAllDates      = async (g)      => { const s=await getDocs(collection(db,P(g,"attendance"))); return s.docs.map(d=>d.id); };
+    window._saveStaff         = async (s,g)    => await setDoc(doc(db,P(g,"config"),"staff"),{list:s});
+    window._listenStaff       = (g,cb)         => onSnapshot(doc(db,P(g,"config"),"staff"),s=>cb(s.exists()?s.data().list:null));
+    window._savePayroll       = async (k,d,g)  => await setDoc(doc(db,P(g,"payroll"),k),d);
+    window._loadPayroll       = async (k,g)    => { const s=await getDoc(doc(db,P(g,"payroll"),k)); return s.exists()?s.data():null; };
+    window._saveSalaryConfig  = async (d,g)    => await setDoc(doc(db,P(g,"config"),"salaries"),d);
+    window._listenSalaryConfig= (g,cb)         => onSnapshot(doc(db,P(g,"config"),"salaries"),s=>cb(s.exists()?s.data():{}));
+    window._saveLeaveReq      = async (id,d,g) => await setDoc(doc(db,P(g,"leaves"),id),d);
+    window._listenLeaveReqs   = (g,cb)         => onSnapshot(collection(db,P(g,"leaves")),s=>cb(s.docs.map(d=>({id:d.id,...d.data()}))));
+    window._saveGymList       = async (list)   => await setDoc(doc(db,"_gyms","registry"),{list});
+    window._listenGymList     = (cb)           => onSnapshot(doc(db,"_gyms","registry"),s=>cb(s.exists()?(s.data().list||[]):[]));
+    window._savePTClient      = async (id,d,g) => await setDoc(doc(db,P(g,"ptclients"),id),d);
+    window._deletePTClient    = async (id,g)   => { const {deleteDoc:dd}=await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"); await dd(doc(db,P(g,"ptclients"),id)); };
+    window._listenPTClients   = (g,cb)         => onSnapshot(collection(db,P(g,"ptclients")),s=>cb(s.docs.map(d=>({id:d.id,...d.data()}))));
+    window._savePTSession     = async (id,d,g) => await setDoc(doc(db,P(g,"ptsessions"),id),d);
+    window._listenPTSessions  = (g,cb)         => onSnapshot(collection(db,P(g,"ptsessions")),s=>cb(s.docs.map(d=>({id:d.id,...d.data()}))));
     window._fbReady = true;
     window.dispatchEvent(new Event("firebaseReady"));
   </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet" />
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -115,6 +133,70 @@
     .punch-active{font-size:10px;background:rgba(0,255,135,0.08);border:1px solid rgba(0,255,135,0.2);border-radius:4px;padding:3px 8px;color:#00ff87;font-family:'Barlow',sans-serif}
     .duration{font-size:11px;color:#ffd60a;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px}
     .cancel-btn{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:2px;color:#6b7280;cursor:pointer;flex:1}
+
+    /* Login */
+    @keyframes login-in{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+    .login-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;animation:login-in 0.5s ease}
+    .login-box{width:100%;max-width:400px;background:#0d1117;border:1px solid rgba(255,77,0,0.25);border-radius:20px;padding:32px 28px;box-shadow:0 20px 60px rgba(0,0,0,0.6)}
+    .login-role-btn{cursor:pointer;border-radius:12px;padding:16px 20px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;letter-spacing:1.5px;transition:all 0.2s;border:1.5px solid transparent;width:100%;text-align:left;display:flex;align-items:center;gap:12px;margin-bottom:10px}
+    .login-role-btn:hover{transform:translateX(4px)}
+    .login-role-owner{background:rgba(255,77,0,0.1);border-color:rgba(255,77,0,0.3);color:#ff8c00}
+    .login-role-owner:hover{background:rgba(255,77,0,0.2);border-color:#ff4d00}
+    .login-role-staff{background:rgba(167,139,250,0.08);border-color:rgba(167,139,250,0.25);color:#a78bfa}
+    .login-role-staff:hover{background:rgba(167,139,250,0.15);border-color:#a78bfa}
+    .pin-display{display:flex;gap:8px;justify-content:center;margin:20px 0}
+    .pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,0.2);transition:all 0.15s}
+    .pin-dot.filled{background:#ff8c00;border-color:#ff8c00;box-shadow:0 0 8px rgba(255,140,0,0.5)}
+    .pinpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
+    .pin-btn{cursor:pointer;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:16px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:20px;color:#e8edf2;transition:all 0.15s}
+    .pin-btn:hover{background:rgba(255,77,0,0.15);border-color:rgba(255,77,0,0.4);color:#ff8c00}
+    .pin-btn:active{transform:scale(0.95)}
+    .pin-btn.zero{grid-column:2}
+    .role-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:11px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px}
+    .role-badge.owner{background:rgba(255,77,0,0.15);border:1px solid rgba(255,77,0,0.4);color:#ff8c00}
+    .role-badge.staff{background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);color:#a78bfa}
+    .staff-portal-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:16px 18px;margin-bottom:10px}
+    .portal-stat{background:rgba(0,0,0,0.2);border-radius:8px;padding:10px;text-align:center;flex:1}
+    /* WhatsApp */
+    .wa-btn{cursor:pointer;background:rgba(37,211,102,0.1);border:1.5px solid rgba(37,211,102,0.4);border-radius:6px;padding:5px 11px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;color:#25d366;transition:all 0.15s;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+    .wa-btn:hover{background:rgba(37,211,102,0.2);border-color:#25d366}
+    .wa-bulk-btn{cursor:pointer;background:rgba(37,211,102,0.1);border:1.5px solid rgba(37,211,102,0.35);border-radius:8px;padding:9px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:1.5px;color:#25d366;transition:all 0.2s;display:inline-flex;align-items:center;gap:8px}
+    .wa-bulk-btn:hover{background:rgba(37,211,102,0.2)}
+    /* Export */
+    .export-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px;margin-bottom:12px}
+    .export-btn{cursor:pointer;border-radius:10px;padding:14px 20px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:2px;transition:all 0.2s;border:1.5px solid;width:100%;text-align:left;display:flex;align-items:center;gap:12px;margin-bottom:10px}
+    .export-btn:hover{transform:translateY(-2px)}
+    .export-btn:disabled{opacity:0.5;cursor:not-allowed;transform:none}
+    .export-excel{background:rgba(0,196,84,0.1);border-color:rgba(0,196,84,0.4);color:#00c454}
+    .export-excel:hover{background:rgba(0,196,84,0.2);border-color:#00c454}
+    .export-pdf{background:rgba(255,77,0,0.1);border-color:rgba(255,77,0,0.4);color:#ff6b35}
+    .export-pdf:hover{background:rgba(255,77,0,0.2);border-color:#ff4d00}
+    .export-month-select{background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.1);border-radius:8px;color:#e8edf2;font-family:'Barlow Condensed',sans-serif;font-size:15px;padding:10px 14px;outline:none;width:100%;cursor:pointer}
+    .export-month-select:focus{border-color:#ff4d00}
+    .preview-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px}
+    .preview-table th{background:rgba(255,77,0,0.15);color:#ff8c00;padding:7px 10px;text-align:left;letter-spacing:1px;font-size:10px;border:1px solid rgba(255,255,255,0.06)}
+    .preview-table td{padding:7px 10px;border:1px solid rgba(255,255,255,0.05);color:#9ca3af;font-family:'Barlow',sans-serif}
+    .preview-table tr:nth-child(even) td{background:rgba(255,255,255,0.02)}
+    .preview-scroll{max-height:260px;overflow-y:auto;border-radius:8px;border:1px solid rgba(255,255,255,0.06)}
+    /* Personal Training */
+    .pt-client-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:15px 18px;margin-bottom:10px;transition:border-color 0.2s;animation:slide-in 0.3s ease both}
+    .pt-client-card:hover{border-color:rgba(167,139,250,0.3)}
+    .pt-stat-pill{display:inline-flex;align-items:center;gap:4px;background:rgba(0,0,0,0.2);border-radius:5px;padding:3px 9px;font-size:11px;font-family:'Barlow',sans-serif}
+    .pt-goal-badge{display:inline-block;background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.3);border-radius:4px;padding:2px 8px;font-size:10px;color:#a78bfa;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px}
+    .session-dot{width:18px;height:18px;border-radius:4px;cursor:pointer;transition:all 0.15s;border:1.5px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0}
+    .session-dot.done{background:rgba(0,255,135,0.2);border-color:#00ff87}
+    .session-dot.missed{background:rgba(255,77,109,0.2);border-color:#ff4d6d}
+    .session-dot.empty{background:rgba(255,255,255,0.03)}
+    .session-dot:hover{transform:scale(1.15)}
+    .pt-progress-bar{height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;margin-top:6px}
+    .pt-progress-fill{height:100%;border-radius:3px;transition:width 0.5s ease;background:linear-gradient(90deg,#a78bfa,#7c3aed)}
+    .pt-add-btn{cursor:pointer;background:rgba(167,139,250,0.1);border:1.5px dashed rgba(167,139,250,0.35);border-radius:10px;padding:14px;width:100%;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:2px;color:#a78bfa;text-transform:uppercase;transition:all 0.2s;margin-bottom:16px}
+    .pt-add-btn:hover{background:rgba(167,139,250,0.18)}
+    .pt-filter-btn{cursor:pointer;background:none;border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:5px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;color:#6b7280;transition:all 0.15s}
+    .pt-filter-btn.active{background:rgba(167,139,250,0.15);border-color:#a78bfa;color:#a78bfa}
+    .trainer-chip{display:inline-flex;align-items:center;gap:4px;background:rgba(255,140,0,0.1);border:1px solid rgba(255,140,0,0.25);border-radius:4px;padding:2px 8px;font-size:10px;color:#ff8c00;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px}
+    .fee-paid{color:#00ff87;font-weight:700}
+    .fee-pending{color:#ff4d6d;font-weight:700}
     .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:12px}
     .cal-day{border-radius:8px;padding:6px 4px;text-align:center;cursor:pointer;transition:all 0.15s;border:1px solid transparent;min-height:52px;display:flex;flex-direction:column;align-items:center;gap:2px}
     .cal-day:hover{border-color:rgba(255,77,0,0.3);background:rgba(255,77,0,0.05)}
@@ -130,6 +212,49 @@
     .cal-weekday{text-align:center;font-size:10px;color:#4b5563;letter-spacing:1px;font-family:'Barlow',sans-serif;padding:4px 0;text-transform:uppercase}
     .cal-legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;padding:10px 14px;background:rgba(255,255,255,0.02);border-radius:8px;border:1px solid rgba(255,255,255,0.05)}
     .cal-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:#6b7280;font-family:'Barlow',sans-serif}
+    /* Payroll */
+    .pay-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:16px 18px;margin-bottom:10px;transition:border-color 0.2s}
+    .pay-card:hover{border-color:rgba(255,140,0,0.25)}
+    .pay-badge{display:inline-block;border-radius:5px;padding:3px 10px;font-size:11px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px;cursor:pointer;transition:all 0.15s}
+    .pay-badge.paid{background:rgba(0,255,135,0.12);border:1px solid #00ff87;color:#00ff87}
+    .pay-badge.pending{background:rgba(255,77,109,0.12);border:1px solid #ff4d6d;color:#ff4d6d}
+    .salary-input{background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,140,0,0.3);border-radius:6px;color:#e8edf2;font-family:'Barlow Condensed',sans-serif;font-size:15px;padding:7px 10px;outline:none;width:130px;text-align:right}
+    .salary-input:focus{border-color:#ff8c00}
+    .month-selector{display:flex;gap:8px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
+    .month-btn{cursor:pointer;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:#6b7280;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;padding:7px 14px;transition:all 0.15s}
+    .month-btn:hover{border-color:#ff4d00;color:#ff8c00}
+    .pay-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+    .pay-row:last-child{border-bottom:none}
+    .pay-lbl{font-size:12px;color:#6b7280;font-family:'Barlow',sans-serif}
+    .pay-val{font-size:14px;font-weight:700;font-family:'Barlow Condensed',sans-serif}
+    .total-box{background:linear-gradient(135deg,rgba(255,77,0,0.12),rgba(255,140,0,0.08));border:1px solid rgba(255,140,0,0.3);border-radius:10px;padding:14px 18px;margin-top:16px}
+    .working-days-input{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:5px;color:#e8edf2;font-family:'Barlow Condensed',sans-serif;font-size:14px;padding:5px 8px;outline:none;width:55px;text-align:center}
+    .working-days-input:focus{border-color:#ff4d00}
+    /* Leave Requests */
+    .leave-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px 18px;margin-bottom:10px;animation:slide-in 0.3s ease both}
+    .leave-type-btn{cursor:pointer;border-radius:6px;padding:7px 14px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:12px;letter-spacing:1px;transition:all 0.15s;border:1.5px solid transparent;background:rgba(255,255,255,0.04);color:#6b7280}
+    .leave-type-btn.active{background:rgba(167,139,250,0.15);border-color:#a78bfa;color:#a78bfa}
+    .approve-btn{cursor:pointer;background:rgba(0,255,135,0.12);border:1.5px solid #00ff87;border-radius:6px;padding:6px 14px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;color:#00ff87;transition:all 0.15s}
+    .approve-btn:hover{background:rgba(0,255,135,0.25)}
+    .reject-btn{cursor:pointer;background:rgba(255,77,109,0.12);border:1.5px solid #ff4d6d;border-radius:6px;padding:6px 14px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;color:#ff4d6d;transition:all 0.15s}
+    .reject-btn:hover{background:rgba(255,77,109,0.25)}
+    .status-pill{display:inline-block;border-radius:20px;padding:3px 12px;font-size:10px;font-family:"Barlow Condensed",sans-serif;font-weight:700;letter-spacing:1px}
+    .pill-pending{background:rgba(255,214,10,0.12);border:1px solid #ffd60a;color:#ffd60a}
+    .pill-approved{background:rgba(0,255,135,0.12);border:1px solid #00ff87;color:#00ff87}
+    .pill-rejected{background:rgba(255,77,109,0.12);border:1px solid #ff4d6d;color:#ff4d6d}
+    .leave-tab-btn{cursor:pointer;background:none;border:none;border-bottom:2px solid transparent;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:13px;letter-spacing:1.5px;padding:8px 14px;color:#4b5563;transition:all 0.2s}
+    .leave-tab-btn.active{color:#a78bfa;border-bottom-color:#a78bfa}
+    .pending-badge{display:inline-flex;align-items:center;justify-content:center;background:#ff4d00;color:white;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:900;margin-left:5px;vertical-align:middle}
+    .pay-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:16px 18px;margin-bottom:10px;transition:border-color 0.2s}
+    .pay-card:hover{border-color:rgba(255,140,0,0.3)}
+    .pay-pill{display:inline-block;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:1px;font-family:'Barlow Condensed',sans-serif}
+    .pay-pill.paid{background:rgba(0,255,135,0.12);color:#00ff87;border:1px solid rgba(0,255,135,0.3)}
+    .pay-pill.pending{background:rgba(255,214,10,0.12);color:#ffd60a;border:1px solid rgba(255,214,10,0.3)}
+    .pay-input{background:rgba(255,255,255,0.06);border:1.5px solid rgba(255,140,0,0.3);border-radius:6px;color:#e8edf2;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;padding:6px 10px;outline:none;width:130px;text-align:right}
+    .pay-input:focus{border-color:#ff8c00}
+    .pay-mark-btn{cursor:pointer;border-radius:6px;padding:7px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;transition:all 0.15s;border:1.5px solid}
+    .month-nav-btn{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e8edf2;cursor:pointer;padding:6px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;transition:all 0.15s}
+    .month-nav-btn:hover{border-color:#ff4d00;color:#ff4d00}
   </style>
 </head>
 <body>
@@ -141,9 +266,9 @@ const { useState, useEffect, useRef } = React;
 
 const ADMIN_PASSWORD = "2020";
 const DEFAULT_STAFF = [
-  { id:"emp1", name:"Sai Vaidya",    role:"Trainer",   avatar:"SV", shift:"Morning (6AM–10AM)"   },
-  { id:"emp2", name:"Karan Honmane", role:"Reception", avatar:"KH", shift:"Afternoon (11AM–4PM)" },
-  { id:"emp3", name:"Aniket Mane",   role:"Trainer",   avatar:"AM", shift:"Evening (5PM–10PM)"   },
+  { id:"emp1", name:"Sai Vaidya",    role:"Trainer",   avatar:"SV", shift:"Morning (6AM–10AM)",   pin:"1111", phone:"" },
+  { id:"emp2", name:"Karan Honmane", role:"Reception", avatar:"KH", shift:"Afternoon (11AM–4PM)", pin:"2222", phone:"" },
+  { id:"emp3", name:"Aniket Mane",   role:"Trainer",   avatar:"AM", shift:"Evening (5PM–10PM)",   pin:"3333", phone:"" },
 ];
 const SHIFTS = ["Morning (6AM–10AM)","Afternoon (11AM–4PM)","Evening (5PM–10PM)"];
 const STATUS_CFG = {
@@ -157,6 +282,11 @@ function today(){ return new Date().toISOString().split("T")[0]; }
 function fmtDate(d){ return new Date(d+"T00:00:00").toLocaleDateString("en-IN",{weekday:"short",day:"2-digit",month:"short",year:"numeric"}); }
 function makeAvatar(name){ return name.split(" ").map(w=>w[0]||"").join("").toUpperCase().slice(0,2); }
 function makeId(){ return "emp"+Date.now(); }
+function openWA(phone, msg){
+  if(!phone||phone.length<10){ alert("No WhatsApp number set.\nGo to Edit Staff to add their number."); return; }
+  const num = "91"+String(phone).replace(/[^0-9]/g,"");
+  window.open("https://wa.me/"+num+"?text="+encodeURIComponent(msg),"_blank");
+}
 function nowTime(){
   const n=new Date();
   return n.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:true});
@@ -269,6 +399,19 @@ function StaffEditor({staff,onSave,onClose}){
               <div className="field-label">Default Shift Timing (type freely)</div>
               <input type="text" placeholder="e.g. 6AM–10AM or 5PM–9PM" value={emp.shift} onChange={e=>upd(emp.id,"shift",e.target.value)}/>
             </div>
+            <div className="field-group">
+              <div className="field-label">Staff Login PIN (4 digits)</div>
+              <input type="text" maxLength={4} placeholder="e.g. 1234" value={emp.pin||""} onChange={e=>upd(emp.id,"pin",e.target.value.replace(/\D/g,"").slice(0,4))} style={{letterSpacing:8,fontSize:18,fontWeight:700}}/>
+              <div style={{fontSize:10,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginTop:4}}>Staff uses this PIN to login to their portal</div>
+            </div>
+            <div className="field-group">
+              <div className="field-label">WhatsApp Phone Number</div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{color:"#25d366",fontWeight:700,fontSize:14}}>+91</span>
+                <input type="text" placeholder="9876543210" maxLength={10} value={emp.phone||""} onChange={e=>upd(emp.id,"phone",e.target.value.replace(/[^0-9]/g,"").slice(0,10))} style={{flex:1,letterSpacing:2}}/>
+              </div>
+              <div style={{fontSize:10,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginTop:4}}>For sending attendance and salary notifications</div>
+            </div>
           </div>
         ))}
         <button className="add-staff-btn" onClick={()=>setList(p=>[...p,{id:makeId(),name:"",role:"",avatar:"",shift:SHIFTS[0]}])}>+ ADD NEW STAFF</button>
@@ -299,6 +442,14 @@ function App(){
   const [showPwd,    setShowPwd]    = useState(false);
   const [showEditor, setShowEditor] = useState(false);
   const [ticker,     setTicker]     = useState(0);
+  const [salaryConfig,setSalaryConfig]= useState({});
+  const [leaveReqs,   setLeaveReqs]   = useState([]);
+  const [session,     setSession]     = useState(null); // null | {role:'owner'} | {role:'staff', emp: {...}}
+  const [gymList,     setGymList]     = useState([{id:"gym_default",name:"Surya Gym 2.0",address:""}]);
+  const [activeGymId, setActiveGymId] = useState("gym_default");
+  const [showGymMgr,  setShowGymMgr]  = useState(false);
+  const [ptClients,   setPtClients]   = useState([]);
+  const [ptSessions,  setPtSessions]  = useState([]);
   const unsubRef  = useRef(null);
   const unsubSRef = useRef(null);
 
@@ -317,21 +468,31 @@ function App(){
 
   useEffect(()=>{
     if(!fbReady)return;
-    window._loadAllDates().then(d=>setAllDates(d.sort((a,b)=>b.localeCompare(a))));
-    unsubSRef.current=window._listenStaff(data=>{ if(data&&data.length>0)setStaff(data); });
-    return()=>{ if(unsubSRef.current)unsubSRef.current(); };
+    window._listenGymList(list=>{ if(list&&list.length>0)setGymList(list); });
   },[fbReady]);
+
+  useEffect(()=>{
+    if(!fbReady)return;
+    window._loadAllDates(activeGymId).then(d=>setAllDates(d.sort((a,b)=>b.localeCompare(a))));
+    if(unsubSRef.current)unsubSRef.current();
+    unsubSRef.current=window._listenStaff(activeGymId,data=>{ if(data&&data.length>0)setStaff(data);else setStaff(DEFAULT_STAFF); });
+    window._listenSalaryConfig(activeGymId,data=>setSalaryConfig(data||{}));
+    window._listenLeaveReqs(activeGymId,data=>setLeaveReqs(data||[]));
+    window._listenPTClients(activeGymId,data=>setPtClients(data||[]));
+    window._listenPTSessions(activeGymId,data=>setPtSessions(data||[]));
+    return()=>{ if(unsubSRef.current)unsubSRef.current(); };
+  },[fbReady,activeGymId]);
 
   useEffect(()=>{
     if(!fbReady)return;
     setLoading(true);
     if(unsubRef.current)unsubRef.current();
-    unsubRef.current=window._listenAttendance(date,data=>{
+    unsubRef.current=window._listenAttendance(date,activeGymId,data=>{
       setDayData(data||{statuses:{},shifts:Object.fromEntries(staff.map(e=>[e.id,e.shift])),notes:{},punchIn:{},punchOut:{}});
       setLoading(false);
     });
     return()=>{ if(unsubRef.current)unsubRef.current(); };
-  },[fbReady,date]);
+  },[fbReady,date,activeGymId]);
 
   const statuses  = dayData?.statuses ||{};
   const dayShifts = dayData?.shifts   ||Object.fromEntries(staff.map(e=>[e.id,e.shift]));
@@ -359,7 +520,7 @@ function App(){
   const doSave=async()=>{
     setSaving(true);
     try{
-      await window._saveAttendance(date,dayData);
+      await window._saveAttendance(date,dayData,activeGymId);
       setAllDates(p=>p.includes(date)?p:[date,...p].sort((a,b)=>b.localeCompare(a)));
       setFlash(true);setTimeout(()=>setFlash(false),1000);
       showToast("✓ Saved & synced to all phones!");
@@ -367,7 +528,7 @@ function App(){
     setSaving(false);
   };
 
-  const doSaveStaff=async(s)=>{ await window._saveStaff(s); setStaff(s); showToast("✓ Staff updated on all phones!"); };
+  const doSaveStaff=async(s)=>{ await window._saveStaff(s,activeGymId); setStaff(s); showToast("✓ Staff updated on all phones!"); };
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(null),3000);};
 
   const stats={
@@ -386,9 +547,40 @@ function App(){
     </div>
   );
 
+  // Show login gate if no session
+  if(!session) return(
+    <LoginGate staff={staff} onLogin={(s)=>setSession(s)}/>
+  );
+
+  // Show staff portal for staff role
+  if(session.role==="staff") return(
+    <div className="wrap">
+      <StaffPortal
+        session={session} staff={staff} allDates={allDates}
+        leaveReqs={leaveReqs} showToast={showToast}
+        ptClients={ptClients} ptSessions={ptSessions} gymId={activeGymId}
+        onSaveSession={async(id,d)=>await window._savePTSession(id,d,activeGymId)}
+        onApprove={async(req)=>{
+          const updated={...req,status:"approved",updatedAt:new Date().toISOString()};
+          await window._saveLeaveReq(req.id,updated,'gym_default');
+          req.dates.forEach(async(d)=>{
+            const existing=await window._loadAttendance(d,'gym_default')||{statuses:{},shifts:Object.fromEntries(staff.map(e=>[e.id,e.shift])),notes:{},punchIn:{},punchOut:{}};
+            existing.statuses[req.empId]="Leave";
+            existing.notes[req.empId]="Approved: "+req.reason;
+            await window._saveAttendance(d,existing,'gym_default');
+          });
+          showToast("✓ Leave approved!");
+        }}
+        onReject={async(req)=>{ await window._saveLeaveReq(req.id,{...req,status:"rejected",updatedAt:new Date().toISOString()}); showToast("✗ Leave rejected."); }}
+        onLogout={()=>setSession(null)}
+      />
+    </div>
+  );
+
   return(<div>
     {showPwd&&<PasswordModal onSuccess={()=>{setShowPwd(false);setShowEditor(true);}} onClose={()=>setShowPwd(false)}/>}
     {showEditor&&<StaffEditor staff={staff} onSave={doSaveStaff} onClose={()=>setShowEditor(false)}/>}
+    {showGymMgr&&<GymManager gymList={gymList} activeGymId={activeGymId} onSwitch={(id)=>{setActiveGymId(id);setAllDates([]);setStaff(DEFAULT_STAFF);setTab("mark");showToast("Switched to "+gymList.find(g=>g.id===id)?.name);}} onSave={async(list)=>{await window._saveGymList(list);setGymList(list);}} onClose={()=>setShowGymMgr(false)}/>}
 
     {/* Header */}
     <div style={{marginBottom:20}}>
@@ -424,9 +616,15 @@ function App(){
           <div style={{fontSize:28,fontWeight:900,letterSpacing:1,lineHeight:1.1,textTransform:"uppercase"}}>Staff Attendance</div>
         </div>
         <div style={{marginLeft:"auto",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
-          <button onClick={()=>setShowPwd(true)} style={{cursor:"pointer",background:"linear-gradient(135deg,rgba(255,77,0,0.2),rgba(255,140,0,0.2))",border:"1.5px solid rgba(255,77,0,0.5)",borderRadius:8,padding:"8px 14px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:13,letterSpacing:2,color:"#ff8c00",textTransform:"uppercase",transition:"all 0.2s"}}>
-            ✏️ EDIT STAFF
-          </button>
+          <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}>
+            <span className="role-badge owner">👑 OWNER</span>
+            <button onClick={()=>setShowPwd(true)} style={{cursor:"pointer",background:"linear-gradient(135deg,rgba(255,77,0,0.2),rgba(255,140,0,0.2))",border:"1.5px solid rgba(255,77,0,0.5)",borderRadius:8,padding:"7px 12px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:12,letterSpacing:2,color:"#ff8c00",textTransform:"uppercase"}}>
+              ✏️ EDIT STAFF
+            </button>
+            <button onClick={()=>setSession(null)} style={{cursor:"pointer",background:"rgba(255,77,109,0.08)",border:"1px solid rgba(255,77,109,0.25)",borderRadius:8,padding:"5px 12px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:11,letterSpacing:1,color:"#ff4d6d"}}>
+              LOGOUT
+            </button>
+          </div>
         </div>
       </div>
       <div className="divider"/>
@@ -447,7 +645,7 @@ function App(){
 
     {/* Tabs */}
     <div className="tabs-bar">
-      {[["mark","Mark Attendance"],["calendar","📅 Calendar"],["history","History"],["summary","Summary"]].map(([id,lbl])=>(
+      {[["mark","Mark Attendance"],["calendar","📅 Calendar"],["history","History"],["summary","Summary"],["payroll","💰 Payroll"],["leave","🏖 Leave"],["pt","💪 PT"],["export","📤 Export"]].map(([id,lbl])=>(
         <button key={id} className={`tab-btn${tab===id?" active":""}`} onClick={()=>setTab(id)}>{lbl}</button>
       ))}
     </div>
@@ -460,10 +658,21 @@ function App(){
           <input type="date" value={date} onChange={e=>setDate(e.target.value)} max={today()} style={{width:"auto"}}/>
           {allDates.includes(date)&&<span className="badge-saved">✓ SAVED</span>}
         </div>
-        <button className="status-btn" onClick={()=>{
-          const u={};staff.forEach(e=>u[e.id]="Present");
-          setDayData(p=>({...p,statuses:{...(p?.statuses||{}),...u}}));
-        }}>✓ ALL PRESENT</button>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <button className="status-btn" onClick={()=>{
+            const u={};staff.forEach(e=>u[e.id]="Present");
+            setDayData(p=>({...p,statuses:{...(p?.statuses||{}),...u}}));
+          }}>✓ ALL PRESENT</button>
+          <button className="wa-bulk-btn" onClick={()=>{
+            const dateStr=fmtDate(date);
+            const lines=staff.map(e=>"- "+e.name+": "+(statuses[e.id]||"Not Marked")+(punchIn[e.id]?" (In: "+punchIn[e.id]+(punchOut[e.id]?" Out: "+punchOut[e.id]:"")+")" :"")).join("\n");
+            const msg="Surya Gym 2.0 - Attendance Report\n"+dateStr+"\n\n"+lines+"\n\nSurya Gym 2.0";
+            const withPhone=staff.filter(e=>e.phone&&e.phone.length>=10);
+            if(!withPhone.length){alert("No WhatsApp numbers set.\nGo to Edit Staff to add numbers.");return;}
+            withPhone.forEach(e=>openWA(e.phone,msg));
+            showToast("WhatsApp opened for "+withPhone.length+" staff!");
+          }}>📱 NOTIFY ALL</button>
+        </div>
       </div>
 
       {loading
@@ -538,9 +747,19 @@ function App(){
               {/* Note row */}
               {editNote===emp.id
                 ?<div style={{marginTop:8}}><textarea rows={2} placeholder="Add note..." value={note} onChange={e=>upd("notes",emp.id,e.target.value)} onBlur={()=>setEditNote(null)} autoFocus/></div>
-                :<div style={{marginTop:6,display:"flex",alignItems:"center",gap:8}}>
+                :<div style={{marginTop:6,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                   {note&&<span style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",fontStyle:"italic"}}>"{note}"</span>}
                   <button className="note-link" onClick={()=>setEditNote(emp.id)}>+ note</button>
+                  <div style={{marginLeft:"auto"}}>
+                    <button className="wa-btn" onClick={()=>{
+                      const st=statuses[emp.id]||"Not Marked";
+                      const pi=punchIn[emp.id]?"\nPunch In: "+punchIn[emp.id]:"";
+                      const po=punchOut[emp.id]?"\nPunch Out: "+punchOut[emp.id]:"";
+                      const nt=note?"\nNote: "+note:"";
+                      const msg="Surya Gym 2.0 - Attendance\n"+fmtDate(date)+"\n\nEmployee: "+emp.name+"\nShift: "+emp.shift+"\nStatus: "+st+pi+po+nt+"\n\nSurya Gym 2.0";
+                      openWA(emp.phone||"", msg);
+                    }}>💬 WhatsApp</button>
+                  </div>
                 </div>
               }
             </div>
@@ -573,21 +792,48 @@ function App(){
     </div>}
 
     {/* SUMMARY TAB */}
-    {tab==="calendar"&&<CalendarTab allDates={allDates} staff={staff} onSelectDate={(d)=>{setDate(d);setTab("mark");}}/>}
+    {tab==="calendar"&&<CalendarTab allDates={allDates} staff={staff} gymId={activeGymId} onSelectDate={(d)=>{setDate(d);setTab("mark");}}/>}
 
-    {tab==="summary"&&<SummaryTab allDates={allDates} staff={staff}/>}
+    {tab==="payroll"&&<PayrollTab allDates={allDates} staff={staff} salaryConfig={salaryConfig} gymId={activeGymId} onSaveConfig={async(cfg)=>{await window._saveSalaryConfig(cfg,activeGymId);setSalaryConfig(cfg);showToast("✓ Salary config saved!");}}/>}
+
+    {tab==="summary"&&<SummaryTab allDates={allDates} staff={staff} gymId={activeGymId}/>}
+
+    {tab==="leave"&&<LeaveTab staff={staff} leaveReqs={leaveReqs} showToast={showToast} gymId={activeGymId} onApprove={async(req)=>{
+      const updated={...req,status:"approved",updatedAt:new Date().toISOString()};
+      await window._saveLeaveReq(req.id,updated,activeGymId);
+      // Auto update attendance for approved leave dates
+      req.dates.forEach(async(d)=>{
+        const existing=await window._loadAttendance(d,activeGymId)||{statuses:{},shifts:Object.fromEntries(staff.map(e=>[e.id,e.shift])),notes:{},punchIn:{},punchOut:{}};
+        existing.statuses[req.empId]="Leave";
+        existing.notes[req.empId]="Approved: "+req.reason;
+        await window._saveAttendance(d,existing,activeGymId);
+        setAllDates(p=>p.includes(d)?p:[d,...p].sort((a,b)=>b.localeCompare(a)));
+      });
+      showToast("✓ Leave approved & attendance updated!");
+    }} onReject={async(req)=>{
+      await window._saveLeaveReq(req.id,{...req,status:"rejected",updatedAt:new Date().toISOString()});
+      showToast("✗ Leave rejected.");
+    }}/>}
+
+    {tab==="pt"&&<PTTab staff={staff} ptClients={ptClients} ptSessions={ptSessions} gymId={activeGymId} showToast={showToast}
+      onSaveClient={async(id,d)=>await window._savePTClient(id,d,activeGymId)}
+      onDeleteClient={async(id)=>await window._deletePTClient(id,activeGymId)}
+      onSaveSession={async(id,d)=>await window._savePTSession(id,d,activeGymId)}
+    />}
+
+    {tab==="export"&&<ExportTab allDates={allDates} staff={staff} salaryConfig={salaryConfig} gymId={activeGymId} gymName={gymList.find(g=>g.id===activeGymId)?.name||"Surya Gym 2.0"}/>}
 
     {toast&&<div className="toast">{toast}</div>}
   </div>);
 }
 
 /* ── SUMMARY TAB ── */
-function SummaryTab({allDates,staff}){
+function SummaryTab({allDates,staff,gymId}){
   const [allData,setAllData]=useState({});
   const [loading,setLoading]=useState(true);
   useEffect(()=>{
     if(!allDates.length){setLoading(false);return;}
-    Promise.all(allDates.map(d=>window._loadAttendance(d).then(data=>[d,data]))).then(results=>{
+    Promise.all(allDates.map(d=>window._loadAttendance(d,gymId||'gym_default').then(data=>[d,data]))).then(results=>{
       const map={};results.forEach(([d,data])=>{if(data)map[d]=data;});
       setAllData(map);setLoading(false);
     });
@@ -642,7 +888,7 @@ function SummaryTab({allDates,staff}){
 }
 
 /* ── CALENDAR TAB ── */
-function CalendarTab({allDates,staff,onSelectDate}){
+function CalendarTab({allDates,staff,onSelectDate,gymId}){
   const [calData,setCalData]=useState({});
   const [loadingCal,setLoadingCal]=useState(false);
   const now=new Date();
@@ -656,7 +902,7 @@ function CalendarTab({allDates,staff,onSelectDate}){
     const mDates=allDates.filter(d=>d.startsWith(ms));
     if(!mDates.length){setCalData({});return;}
     setLoadingCal(true);
-    Promise.all(mDates.map(d=>window._loadAttendance(d).then(data=>[d,data]))).then(results=>{
+    Promise.all(mDates.map(d=>window._loadAttendance(d,gymId||'gym_default').then(data=>[d,data]))).then(results=>{
       const map={};results.forEach(([d,data])=>{if(data)map[d]=data;});
       setCalData(map);setLoadingCal(false);
     });
@@ -773,6 +1019,1586 @@ function CalendarTab({allDates,staff,onSelectDate}){
     </div>
   );
 }
+
+/* ── PAYROLL TAB ── */
+function PayrollTab({allDates,staff,salaryConfig,onSaveConfig,gymId}){
+  const now=new Date();
+  const [viewYear,setViewYear]=useState(now.getFullYear());
+  const [viewMonth,setViewMonth]=useState(now.getMonth());
+  const [allData,setAllData]=useState({});
+  const [loading,setLoading]=useState(false);
+  const [payStatus,setPayStatus]=useState({});
+  const [workingDays,setWorkingDays]=useState(26);
+  const [editSalary,setEditSalary]=useState(false);
+  const [localSalaries,setLocalSalaries]=useState({});
+  const [savingCfg,setSavingCfg]=useState(false);
+  const [savingPay,setSavingPay]=useState(false);
+  const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+  const monthKey=`${viewYear}-${String(viewMonth+1).padStart(2,"0")}`;
+
+  // Load attendance data for selected month
+  useEffect(()=>{
+    const mDates=allDates.filter(d=>d.startsWith(monthKey));
+    if(!mDates.length){setAllData({});return;}
+    setLoading(true);
+    Promise.all(mDates.map(d=>window._loadAttendance(d,gymId||'gym_default').then(data=>[d,data]))).then(results=>{
+      const map={};results.forEach(([d,data])=>{if(data)map[d]=data;});
+      setAllData(map);setLoading(false);
+    });
+  },[viewYear,viewMonth,allDates]);
+
+  // Load payroll status for month
+  useEffect(()=>{
+    window._loadPayroll(monthKey,gymId).then(data=>{
+      if(data){setPayStatus(data.status||{});setWorkingDays(data.workingDays||26);}
+      else{setPayStatus({});setWorkingDays(26);}
+    });
+  },[monthKey]);
+
+  // Sync local salaries from config
+  useEffect(()=>{
+    const init={};
+    staff.forEach(e=>{init[e.id]=salaryConfig[e.id]||"";});
+    setLocalSalaries(init);
+  },[salaryConfig,staff]);
+
+  const prevMonth=()=>{if(viewMonth===0){setViewMonth(11);setViewYear(y=>y-1);}else setViewMonth(m=>m-1);};
+  const nextMonth=()=>{if(viewMonth===11){setViewMonth(0);setViewYear(y=>y+1);}else setViewMonth(m=>m+1);};
+
+  // Calculate stats per employee for this month
+  const calcStats=(empId)=>{
+    let present=0,absent=0,halfDay=0,leave=0,totalMins=0;
+    Object.values(allData).forEach(data=>{
+      const s=(data?.statuses||{})[empId];
+      const pin=(data?.punchIn||{})[empId];
+      const pout=(data?.punchOut||{})[empId];
+      if(s==="Present"||s==="Half Day")present++;
+      if(s==="Absent")absent++;
+      if(s==="Half Day")halfDay++;
+      if(s==="Leave")leave++;
+      if(pin&&pout){
+        const parseT=t=>{const[time,ampm]=t.split(" ");const[h,m]=(time||"00:00").split(":").map(Number);let hr=h;if(ampm==="PM"&&h!==12)hr+=12;if(ampm==="AM"&&h===12)hr=0;return hr*60+m;};
+        const d=parseT(pout)-parseT(pin);if(d>0)totalMins+=d;
+      }
+    });
+    const monthlySalary=parseFloat(salaryConfig[empId])||0;
+    const perDay=workingDays>0?monthlySalary/workingDays:0;
+    // Half day counts as full present per user's preference
+    const payableDays=present; // present already includes half days counted as full
+    const absentDeduction=absent*perDay;
+    const netSalary=Math.max(0,monthlySalary-absentDeduction);
+    const hrs=Math.floor(totalMins/60),mins=totalMins%60;
+    return{present,absent,halfDay,leave,monthlySalary,perDay,absentDeduction,netSalary,totalMins,hrs,mins,payableDays};
+  };
+
+  const togglePaid=async(empId)=>{
+    const newStatus={...payStatus,[empId]:payStatus[empId]==="paid"?"pending":"paid"};
+    setPayStatus(newStatus);
+    await window._savePayroll(monthKey,{status:newStatus,workingDays,updatedAt:new Date().toISOString()},gymId);
+  };
+
+  const savePayroll=async()=>{
+    setSavingPay(true);
+    await window._savePayroll(monthKey,{status:payStatus,workingDays,updatedAt:new Date().toISOString()},gymId);
+    setSavingPay(false);
+  };
+
+  const saveSalaries=async()=>{
+    setSavingCfg(true);
+    await onSaveConfig(localSalaries);
+    setEditSalary(false);setSavingCfg(false);
+  };
+
+  // Total payroll for month
+  const totalNet=staff.reduce((sum,e)=>sum+calcStats(e.id).netSalary,0);
+  const totalPaid=staff.filter(e=>payStatus[e.id]==="paid").reduce((sum,e)=>sum+calcStats(e.id).netSalary,0);
+  const totalPending=totalNet-totalPaid;
+  const recordedDays=Object.keys(allData).length;
+
+  return(
+    <div>
+      {/* Month selector */}
+      <div className="month-selector">
+        <button className="month-btn" onClick={prevMonth}>← PREV</button>
+        <div style={{flex:1,textAlign:"center"}}>
+          <div style={{fontSize:20,fontWeight:900,letterSpacing:2}}>{MONTHS[viewMonth].toUpperCase()} {viewYear}</div>
+          <div style={{fontSize:11,color:"#4b5563",fontFamily:"'Barlow',sans-serif"}}>{recordedDays} days recorded this month</div>
+        </div>
+        <button className="month-btn" onClick={nextMonth}>NEXT →</button>
+      </div>
+
+      {/* Working days + salary config row */}
+      <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,padding:"8px 14px"}}>
+          <span style={{fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>Working Days:</span>
+          <input className="working-days-input" type="number" min="1" max="31" value={workingDays} onChange={e=>setWorkingDays(Number(e.target.value)||26)}/>
+        </div>
+        <button onClick={()=>setEditSalary(e=>!e)} style={{cursor:"pointer",background:editSalary?"rgba(255,140,0,0.15)":"rgba(255,255,255,0.04)",border:`1.5px solid ${editSalary?"#ff8c00":"rgba(255,255,255,0.1)"}`,borderRadius:8,padding:"8px 14px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:12,letterSpacing:1,color:editSalary?"#ff8c00":"#6b7280",cursor:"pointer"}}>
+          ⚙️ {editSalary?"HIDE":"SET"} SALARIES
+        </button>
+        {editSalary&&<button className="save-btn" style={{padding:"8px 18px",fontSize:13}} onClick={saveSalaries} disabled={savingCfg}>
+          {savingCfg?"SAVING...":"SAVE SALARIES"}
+        </button>}
+      </div>
+
+      {/* Salary config editor */}
+      {editSalary&&(
+        <div style={{background:"rgba(255,140,0,0.05)",border:"1px solid rgba(255,140,0,0.2)",borderRadius:10,padding:"14px 18px",marginBottom:16}}>
+          <div style={{fontSize:11,color:"#ff8c00",letterSpacing:2,marginBottom:12,fontFamily:"'Barlow',sans-serif"}}>SET MONTHLY SALARY (₹)</div>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {staff.map(emp=>(
+              <div key={emp.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:700}}>{emp.name}</div>
+                  <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{emp.role}</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:16,color:"#ff8c00",fontWeight:700}}>₹</span>
+                  <input className="salary-input" type="number" placeholder="0" value={localSalaries[emp.id]||""} onChange={e=>setLocalSalaries(p=>({...p,[emp.id]:e.target.value}))}/>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Summary totals */}
+      <div className="total-box" style={{marginBottom:16}}>
+        <div style={{fontSize:11,color:"#ff8c00",letterSpacing:2,marginBottom:12,fontFamily:"'Barlow',sans-serif"}}>MONTHLY PAYROLL SUMMARY</div>
+        <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+          {[["Total Payroll","₹"+totalNet.toLocaleString("en-IN"),"#e8edf2"],["Paid","₹"+totalPaid.toLocaleString("en-IN"),"#00ff87"],["Pending","₹"+totalPending.toLocaleString("en-IN"),"#ff4d6d"]].map(([l,v,c])=>(
+            <div key={l} style={{flex:1,minWidth:80,textAlign:"center",background:"rgba(0,0,0,0.2)",borderRadius:8,padding:"10px 6px"}}>
+              <div style={{fontSize:18,fontWeight:900,color:c}}>{v}</div>
+              <div style={{fontSize:9,color:"#4b5563",letterSpacing:1,fontFamily:"'Barlow',sans-serif",marginTop:2}}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Per employee payroll cards */}
+      {loading
+        ?<div style={{textAlign:"center",padding:"30px 0"}}><span className="spinner"></span><span style={{color:"#6b7280",fontFamily:"'Barlow',sans-serif",fontSize:13}}>Calculating...</span></div>
+        :staff.map((emp,i)=>{
+          const s=calcStats(emp.id);
+          const isPaid=payStatus[emp.id]==="paid";
+          const hasSalary=s.monthlySalary>0;
+          return(
+            <div key={emp.id} className="pay-card" style={{animationDelay:`${i*0.06}s`,animation:"slide-in 0.3s ease both",borderColor:isPaid?"rgba(0,255,135,0.2)":"rgba(255,255,255,0.07)"}}>
+              {/* Header */}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{width:38,height:38,borderRadius:8,background:"linear-gradient(135deg,rgba(255,77,0,0.2),rgba(255,140,0,0.2))",border:"1.5px solid rgba(255,77,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#ff8c00",flexShrink:0}}>{emp.avatar||makeAvatar(emp.name)}</div>
+                  <div>
+                    <div style={{fontSize:16,fontWeight:700}}>{emp.name}</div>
+                    <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{emp.role} · {emp.shift}</div>
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                  <span className={`pay-badge ${isPaid?"paid":"pending"}`} onClick={()=>togglePaid(emp.id)}>
+                    {isPaid?"✓ PAID":"⏳ PENDING"}
+                  </span>
+                  <button className="wa-btn" onClick={()=>{
+                    const perDay=s.monthlySalary>0?s.monthlySalary/26:0;
+                    const msg="Surya Gym 2.0 - Salary Slip\n"+MONTHS[viewMonth]+" "+viewYear+"\n\nEmployee: "+emp.name+"\nRole: "+emp.role+"\n\nPresent: "+s.present+" days\nAbsent: "+s.absent+" days\nMonthly Salary: Rs."+s.monthlySalary+"\nDeduction: Rs."+Math.round(s.absent*perDay)+"\nNet Salary: Rs."+Math.round(s.netSalary)+"\n\nStatus: "+(isPaid?"PAID":"PENDING")+"\n\nSurya Gym 2.0";
+                    openWA(emp.phone||"", msg);
+                  }}>💬 Salary Slip</button>
+                </div>
+              </div>
+
+              {/* Attendance breakdown */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:12}}>
+                {[["Present",s.present,"#00ff87"],["Absent",s.absent,"#ff4d6d"],["Half Day",s.halfDay,"#ffd60a"],["Leave",s.leave,"#a78bfa"]].map(([l,v,c])=>(
+                  <div key={l} style={{background:"rgba(0,0,0,0.2)",borderRadius:6,padding:"7px 4px",textAlign:"center"}}>
+                    <div style={{fontSize:18,fontWeight:900,color:c,lineHeight:1}}>{v}</div>
+                    <div style={{fontSize:9,color:"#4b5563",letterSpacing:1,fontFamily:"'Barlow',sans-serif",marginTop:2}}>{l}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Hours worked */}
+              {s.totalMins>0&&(
+                <div style={{marginBottom:10,padding:"6px 10px",background:"rgba(255,214,10,0.06)",border:"1px solid rgba(255,214,10,0.15)",borderRadius:6,display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>Total hours this month:</span>
+                  <span style={{fontSize:14,fontWeight:700,color:"#ffd60a"}}>{s.hrs}h {s.mins}m</span>
+                </div>
+              )}
+
+              {/* Salary breakdown */}
+              {hasSalary?(
+                <div style={{background:"rgba(0,0,0,0.15)",borderRadius:8,padding:"10px 12px"}}>
+                  <div className="pay-row">
+                    <span className="pay-lbl">Monthly Salary</span>
+                    <span className="pay-val" style={{color:"#e8edf2"}}>₹{s.monthlySalary.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="pay-row">
+                    <span className="pay-lbl">Per Day (÷{workingDays} days)</span>
+                    <span className="pay-val" style={{color:"#9ca3af"}}>₹{Math.round(s.perDay).toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="pay-row">
+                    <span className="pay-lbl">Absent Days ({s.absent})</span>
+                    <span className="pay-val" style={{color:"#ff4d6d"}}>− ₹{Math.round(s.absentDeduction).toLocaleString("en-IN")}</span>
+                  </div>
+                  <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.08)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontSize:13,fontWeight:700,letterSpacing:1}}>NET SALARY</span>
+                    <span style={{fontSize:22,fontWeight:900,color:isPaid?"#00ff87":"#ff8c00"}}>₹{Math.round(s.netSalary).toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
+              ):(
+                <div style={{textAlign:"center",padding:"10px",color:"#374151",fontSize:12,fontFamily:"'Barlow',sans-serif"}}>
+                  ⚙️ Set salary above to calculate payroll
+                </div>
+              )}
+            </div>
+          );
+        })
+      }
+
+      {/* Save payroll status button */}
+      <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}>
+        <button className="save-btn" onClick={savePayroll} disabled={savingPay}>
+          {savingPay?<><span className="spinner"></span>SAVING...</>:"SAVE PAYROLL STATUS"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── LEAVE TAB ── */
+function LeaveTab({staff,leaveReqs,showToast,onApprove,onReject,restrictToEmp,gymId}){
+  const [subTab,setSubTab]=useState("requests"); // requests | apply
+  const [empId,setEmpId]=useState(restrictToEmp||staff[0]?.id||"");
+  const [leaveType,setLeaveType]=useState("Sick Leave");
+  const [reason,setReason]=useState("");
+  const [fromDate,setFromDate]=useState(today());
+  const [toDate,setToDate]=useState(today());
+  const [submitting,setSubmitting]=useState(false);
+  const [filterEmp,setFilterEmp]=useState("all");
+  const [filterStatus,setFilterStatus]=useState("all");
+
+  const LEAVE_TYPES=["Sick Leave","Personal Leave","Emergency","Festival","Other"];
+
+  const pendingCount=leaveReqs.filter(r=>r.status==="pending").length;
+
+  // Build dates array from from-to range
+  const buildDates=(from,to)=>{
+    const dates=[]; let cur=new Date(from);
+    const end=new Date(to);
+    while(cur<=end){dates.push(cur.toISOString().split("T")[0]);cur.setDate(cur.getDate()+1);}
+    return dates;
+  };
+
+  const submitLeave=async()=>{
+    if(!empId||!reason.trim()){showToast("❌ Fill all fields!");return;}
+    if(fromDate>toDate){showToast("❌ From date must be before To date!");return;}
+    setSubmitting(true);
+    const dates=buildDates(fromDate,toDate);
+    const id="leave_"+Date.now();
+    const req={id,empId,empName:staff.find(e=>e.id===empId)?.name||"",leaveType,reason:reason.trim(),dates,fromDate,toDate,status:"pending",submittedAt:new Date().toISOString()};
+    await window._saveLeaveReq(id,req,gymId||'gym_default');
+    setReason("");setFromDate(today());setToDate(today());
+    setSubmitting(false);
+    setSubTab("requests");
+    showToast("✓ Leave request submitted!");
+  };
+
+  // Filter requests
+  const filtered=leaveReqs.filter(r=>{
+    if(filterEmp!=="all"&&r.empId!==filterEmp)return false;
+    if(filterStatus!=="all"&&r.status!==filterStatus)return false;
+    return true;
+  }).sort((a,b)=>b.submittedAt?.localeCompare(a.submittedAt||"")||0);
+
+  const fmtDates=(dates)=>{
+    if(!dates||!dates.length)return"—";
+    if(dates.length===1)return fmtDate(dates[0]);
+    return `${fmtDate(dates[0])} → ${fmtDate(dates[dates.length-1])} (${dates.length} days)`;
+  };
+
+  return(
+    <div>
+      {/* Sub tabs */}
+      <div style={{display:"flex",borderBottom:"1px solid rgba(255,255,255,0.07)",marginBottom:20}}>
+        <button className={`leave-tab-btn${subTab==="requests"?" active":""}`} onClick={()=>setSubTab("requests")}>
+          📋 ALL REQUESTS {pendingCount>0&&<span className="pending-badge">{pendingCount}</span>}
+        </button>
+        <button className={`leave-tab-btn${subTab==="apply"?" active":""}`} onClick={()=>setSubTab("apply")}>
+          ✍️ APPLY LEAVE
+        </button>
+      </div>
+
+      {/* APPLY LEAVE FORM */}
+      {subTab==="apply"&&(
+        <div style={{background:"rgba(167,139,250,0.04)",border:"1px solid rgba(167,139,250,0.15)",borderRadius:12,padding:"20px"}}>
+          <div style={{fontSize:16,fontWeight:900,letterSpacing:2,color:"#a78bfa",marginBottom:18}}>NEW LEAVE REQUEST</div>
+
+          {!restrictToEmp&&<div className="field-group">
+            <div className="field-label">Employee</div>
+            <select value={empId} onChange={e=>setEmpId(e.target.value)} style={{color:"#e8edf2"}}>
+              {staff.map(e=><option key={e.id} value={e.id}>{e.name} — {e.role}</option>)}
+            </select>
+          </div>}
+
+          <div className="field-group">
+            <div className="field-label">Leave Type</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
+              {LEAVE_TYPES.map(t=>(
+                <button key={t} className={`leave-type-btn${leaveType===t?" active":""}`} onClick={()=>setLeaveType(t)}>{t}</button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div className="field-group">
+              <div className="field-label">From Date</div>
+              <input type="date" value={fromDate} onChange={e=>{setFromDate(e.target.value);if(e.target.value>toDate)setToDate(e.target.value);}}/>
+            </div>
+            <div className="field-group">
+              <div className="field-label">To Date</div>
+              <input type="date" value={toDate} min={fromDate} onChange={e=>setToDate(e.target.value)}/>
+            </div>
+          </div>
+
+          {fromDate&&toDate&&fromDate<=toDate&&(
+            <div style={{marginBottom:12,fontSize:12,color:"#a78bfa",fontFamily:"'Barlow',sans-serif",background:"rgba(167,139,250,0.08)",border:"1px solid rgba(167,139,250,0.2)",borderRadius:6,padding:"6px 12px"}}>
+              📅 {buildDates(fromDate,toDate).length} day(s) leave
+            </div>
+          )}
+
+          <div className="field-group">
+            <div className="field-label">Reason</div>
+            <textarea rows={3} placeholder="Reason for leave..." value={reason} onChange={e=>setReason(e.target.value)}/>
+          </div>
+
+          <button className="save-btn" style={{width:"100%",marginTop:4}} onClick={submitLeave} disabled={submitting}>
+            {submitting?<><span className="spinner"></span>SUBMITTING...</>:"SUBMIT LEAVE REQUEST"}
+          </button>
+        </div>
+      )}
+
+      {/* REQUESTS LIST */}
+      {subTab==="requests"&&(
+        <div>
+          {/* Filters */}
+          <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+            <select value={filterEmp} onChange={e=>setFilterEmp(e.target.value)} style={{flex:1,minWidth:140,color:"#e8edf2"}}>
+              <option value="all">All Employees</option>
+              {staff.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+            </select>
+            <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} style={{flex:1,minWidth:120,color:"#e8edf2"}}>
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+
+          {filtered.length===0
+            ?<div className="empty"><div style={{fontSize:42,marginBottom:12}}>🏖</div><div style={{fontSize:16,letterSpacing:2}}>NO LEAVE REQUESTS</div></div>
+            :filtered.map((req,i)=>{
+              const emp=staff.find(e=>e.id===req.empId);
+              return(
+                <div key={req.id} className="leave-card" style={{animationDelay:`${i*0.05}s`,borderColor:req.status==="approved"?"rgba(0,255,135,0.2)":req.status==="rejected"?"rgba(255,77,109,0.2)":"rgba(255,214,10,0.2)"}}>
+                  <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,marginBottom:10}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <div style={{width:36,height:36,borderRadius:8,background:"linear-gradient(135deg,rgba(167,139,250,0.2),rgba(167,139,250,0.1))",border:"1.5px solid rgba(167,139,250,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#a78bfa",flexShrink:0}}>
+                        {emp?emp.avatar||makeAvatar(emp.name):"?"}
+                      </div>
+                      <div>
+                        <div style={{fontSize:15,fontWeight:700}}>{req.empName}</div>
+                        <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{req.leaveType}</div>
+                      </div>
+                    </div>
+                    <span className={`status-pill ${req.status==="pending"?"pill-pending":req.status==="approved"?"pill-approved":"pill-rejected"}`}>
+                      {req.status==="pending"?"⏳ PENDING":req.status==="approved"?"✓ APPROVED":"✗ REJECTED"}
+                    </span>
+                  </div>
+
+                  <div style={{fontSize:12,color:"#9ca3af",fontFamily:"'Barlow',sans-serif",marginBottom:8,fontStyle:"italic"}}>"{req.reason}"</div>
+
+                  <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginBottom:req.status==="pending"?12:0}}>
+                    📅 {fmtDates(req.dates)}
+                  </div>
+
+                  {req.status==="pending"&&!restrictToEmp&&(
+                    <div style={{display:"flex",gap:8,marginTop:8}}>
+                      <button className="approve-btn" style={{flex:1}} onClick={()=>onApprove(req)}>✓ APPROVE</button>
+                      <button className="reject-btn" style={{flex:1}} onClick={()=>onReject(req)}>✗ REJECT</button>
+                    </div>
+                  )}
+
+                  {req.updatedAt&&req.status!=="pending"&&(
+                    <div style={{fontSize:10,color:"#374151",fontFamily:"'Barlow',sans-serif",marginTop:6}}>
+                      {req.status==="approved"?"✓ Approved":"✗ Rejected"} · {new Date(req.updatedAt).toLocaleDateString("en-IN")}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          }
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
+/* ── PERSONAL TRAINING TAB ── */
+function PTTab({staff, ptClients, ptSessions, gymId, showToast, onSaveClient, onDeleteClient, onSaveSession}){
+  const [view,       setView]       = useState("clients"); // clients | add | detail
+  const [selClient,  setSelClient]  = useState(null);
+  const [filterTrainer, setFilterTrainer] = useState("all");
+  const [filterStatus,  setFilterStatus]  = useState("all");
+  const [form, setForm] = useState({name:"",phone:"",goal:"",trainerId:"",totalSessions:12,feePaid:false,feeAmount:"",startDate:today(),notes:""});
+  const [saving, setSaving] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+
+  const GOALS = ["Weight Loss","Muscle Gain","General Fitness","Rehabilitation","Flexibility","Sports Training","Pre/Post Natal","Other"];
+
+  const trainers = staff.filter(e=>e.role?.toLowerCase().includes("train") || true);
+
+  const resetForm = () => setForm({name:"",phone:"",goal:"",trainerId:staff[0]?.id||"",totalSessions:12,feePaid:false,feeAmount:"",startDate:today(),notes:""});
+
+  const clientSessions = (clientId) => ptSessions.filter(s=>s.clientId===clientId);
+  const doneSessions   = (clientId) => clientSessions(clientId).filter(s=>s.status==="done").length;
+  const missedSessions = (clientId) => clientSessions(clientId).filter(s=>s.status==="missed").length;
+
+  const saveClient = async () => {
+    if(!form.name.trim()){showToast("Enter client name!");return;}
+    if(!form.trainerId){showToast("Assign a trainer!");return;}
+    setSaving(true);
+    const id = editMode ? selClient.id : "ptc_"+Date.now();
+    const data = {...form, id, updatedAt:new Date().toISOString(), createdAt: editMode?selClient.createdAt:new Date().toISOString()};
+    await onSaveClient(id, data);
+    showToast(editMode?"✓ Client updated!":"✓ Client added!");
+    setSaving(false);
+    resetForm(); setEditMode(false); setView("clients");
+  };
+
+  const deleteClient = async (client) => {
+    if(!window.confirm("Delete "+client.name+"? This cannot be undone."))return;
+    await onDeleteClient(client.id);
+    showToast("Client removed.");
+    setView("clients"); setSelClient(null);
+  };
+
+  const toggleSession = async (clientId, dateStr, currentStatus) => {
+    const id = "pts_"+clientId+"_"+dateStr;
+    const next = currentStatus==="done"?"missed":currentStatus==="missed"?"":  "done";
+    if(next===""){
+      // remove session
+      await onSaveSession(id,{clientId,date:dateStr,status:"none",id});
+    } else {
+      await onSaveSession(id,{clientId,date:dateStr,status:next,id});
+    }
+  };
+
+  const getSessionStatus = (clientId, dateStr) => {
+    const s = ptSessions.find(s=>s.clientId===clientId&&s.date===dateStr);
+    return s?.status||"";
+  };
+
+  // Build last 30 days for session grid
+  const last30 = Array.from({length:30},(_,i)=>{
+    const d=new Date(); d.setDate(d.getDate()-29+i);
+    return d.toISOString().split("T")[0];
+  });
+
+  // Filtered clients
+  const filtered = ptClients.filter(cl=>{
+    if(filterTrainer!=="all"&&cl.trainerId!==filterTrainer)return false;
+    const done=doneSessions(cl.id);
+    if(filterStatus==="active"&&done>=Number(cl.totalSessions||0))return false;
+    if(filterStatus==="completed"&&done<Number(cl.totalSessions||0))return false;
+    return true;
+  });
+
+  const activeCount   = ptClients.filter(cl=>doneSessions(cl.id)<Number(cl.totalSessions||0)).length;
+  const completedCount= ptClients.filter(cl=>doneSessions(cl.id)>=Number(cl.totalSessions||0)&&cl.totalSessions>0).length;
+  const feesPending   = ptClients.filter(cl=>!cl.feePaid).length;
+
+  // ── CLIENT DETAIL VIEW ──
+  if(view==="detail"&&selClient){
+    const cl = ptClients.find(c=>c.id===selClient.id)||selClient;
+    const trainer = staff.find(s=>s.id===cl.trainerId);
+    const done=doneSessions(cl.id);
+    const missed=missedSessions(cl.id);
+    const total=Number(cl.totalSessions||0);
+    const pct=total>0?Math.round(done/total*100):0;
+    const remaining=Math.max(0,total-done);
+
+    return(
+      <div>
+        <button onClick={()=>{setView("clients");setSelClient(null);}} style={{background:"none",border:"none",color:"#6b7280",cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,letterSpacing:1,marginBottom:16,display:"flex",alignItems:"center",gap:6}}>
+          ← BACK TO CLIENTS
+        </button>
+
+        {/* Client header */}
+        <div style={{background:"rgba(167,139,250,0.06)",border:"1px solid rgba(167,139,250,0.2)",borderRadius:14,padding:"18px",marginBottom:16}}>
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+            <div style={{display:"flex",gap:12,alignItems:"center"}}>
+              <div style={{width:50,height:50,borderRadius:12,background:"rgba(167,139,250,0.15)",border:"1.5px solid rgba(167,139,250,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:900,color:"#a78bfa",flexShrink:0}}>{cl.name[0]?.toUpperCase()}</div>
+              <div>
+                <div style={{fontSize:20,fontWeight:900}}>{cl.name}</div>
+                {cl.phone&&<div style={{fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>📱 {cl.phone}</div>}
+                {cl.goal&&<span className="pt-goal-badge" style={{marginTop:4,display:"inline-block"}}>{cl.goal}</span>}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <button onClick={()=>{setForm({...cl});setEditMode(true);setView("add");}} style={{cursor:"pointer",background:"rgba(255,140,0,0.1)",border:"1px solid rgba(255,140,0,0.3)",borderRadius:6,padding:"6px 12px",color:"#ff8c00",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:11,letterSpacing:1}}>✏️ EDIT</button>
+              <button onClick={()=>deleteClient(cl)} style={{cursor:"pointer",background:"rgba(255,77,109,0.1)",border:"1px solid rgba(255,77,109,0.3)",borderRadius:6,padding:"6px 12px",color:"#ff4d6d",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:11,letterSpacing:1}}>🗑 DELETE</button>
+            </div>
+          </div>
+
+          <div style={{display:"flex",gap:10,marginTop:14,flexWrap:"wrap"}}>
+            {[["Trainer",trainer?.name||"Unassigned","#ff8c00"],["Sessions Done",done,"#00ff87"],["Missed",missed,"#ff4d6d"],["Remaining",remaining,"#a78bfa"],["Package",total+" sessions","#ffd60a"]].map(([l,v,col])=>(
+              <div key={l} style={{background:"rgba(0,0,0,0.25)",borderRadius:8,padding:"8px 14px",textAlign:"center",flex:"1",minWidth:80}}>
+                <div style={{fontSize:18,fontWeight:900,color:col,lineHeight:1}}>{v}</div>
+                <div style={{fontSize:9,color:"#4b5563",letterSpacing:1,fontFamily:"'Barlow',sans-serif",marginTop:2,textTransform:"uppercase"}}>{l}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Progress bar */}
+          <div style={{marginTop:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginBottom:4}}>
+              <span>Progress</span><span style={{color:pct>=100?"#00ff87":"#a78bfa",fontWeight:700}}>{pct}% complete</span>
+            </div>
+            <div className="pt-progress-bar">
+              <div className="pt-progress-fill" style={{width:pct+"%",background:pct>=100?"linear-gradient(90deg,#00ff87,#059669)":"linear-gradient(90deg,#a78bfa,#7c3aed)"}}/>
+            </div>
+          </div>
+
+          {/* Fee status */}
+          <div style={{marginTop:12,display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:"rgba(0,0,0,0.2)",borderRadius:8,flexWrap:"wrap"}}>
+            <span style={{fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>Fee:</span>
+            {cl.feeAmount&&<span style={{fontSize:14,fontWeight:700,color:"#e8edf2"}}>₹{Number(cl.feeAmount).toLocaleString("en-IN")}</span>}
+            <span className={cl.feePaid?"fee-paid":"fee-pending"} style={{fontSize:12}}>{cl.feePaid?"✓ PAID":"⏳ PENDING"}</span>
+            {cl.startDate&&<span style={{fontSize:11,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginLeft:"auto"}}>Started: {fmtDate(cl.startDate)}</span>}
+          </div>
+          {cl.notes&&<div style={{marginTop:8,fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif",fontStyle:"italic",padding:"6px 10px",background:"rgba(255,255,255,0.03)",borderRadius:6}}>"{cl.notes}"</div>}
+        </div>
+
+        {/* Session tracker */}
+        <div style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"16px 18px"}}>
+          <div style={{fontSize:12,fontWeight:700,letterSpacing:2,color:"#a78bfa",marginBottom:4}}>SESSION TRACKER — LAST 30 DAYS</div>
+          <div style={{fontSize:10,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginBottom:12}}>Tap a day: empty → ✓ Done → ✗ Missed → empty</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+            {last30.map(dateStr=>{
+              const status=getSessionStatus(cl.id,dateStr);
+              const isFuture=dateStr>today();
+              const d=new Date(dateStr+"T00:00:00");
+              const dayNum=d.getDate();
+              const isToday=dateStr===today();
+              return(
+                <div key={dateStr} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                  <div style={{fontSize:8,color:isToday?"#ff4d00":"#374151",fontFamily:"'Barlow',sans-serif",fontWeight:isToday?700:400}}>{dayNum}</div>
+                  <div className={"session-dot "+(status==="done"?"done":status==="missed"?"missed":"empty")}
+                    onClick={()=>!isFuture&&toggleSession(cl.id,dateStr,status)}
+                    style={{opacity:isFuture?0.25:1,cursor:isFuture?"not-allowed":"pointer",border:isToday?"1.5px solid #ff4d00":undefined}}
+                    title={dateStr}>
+                    {status==="done"?"✓":status==="missed"?"✗":""}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{display:"flex",gap:14,marginTop:12,flexWrap:"wrap"}}>
+            {[["✓ Done","#00ff87"],["✗ Missed","#ff4d6d"],["Empty = not scheduled","#374151"]].map(([l,col])=>(
+              <div key={l} style={{fontSize:10,color:col,fontFamily:"'Barlow',sans-serif"}}>{l}</div>
+            ))}
+          </div>
+        </div>
+
+        {/* WhatsApp to client */}
+        {cl.phone&&<div style={{marginTop:12,display:"flex",gap:8}}>
+          <button className="wa-btn" style={{flex:1,justifyContent:"center",padding:"10px"}} onClick={()=>{
+            const msg="Hi "+cl.name+"!\\nSurya Gym 2.0 - PT Update\\n\\nTrainer: "+(trainer?.name||"")+"\\nSessions Done: "+done+"/"+total+"\\nRemaining: "+remaining+" sessions\\nFee: "+(cl.feePaid?"PAID":"PENDING")+"\\n\\nSee you at the gym!";
+            openWA(cl.phone,msg);
+          }}>💬 WhatsApp Client</button>
+        </div>}
+      </div>
+    );
+  }
+
+  // ── ADD/EDIT FORM ──
+  if(view==="add"){
+    return(
+      <div>
+        <button onClick={()=>{setView("clients");resetForm();setEditMode(false);}} style={{background:"none",border:"none",color:"#6b7280",cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,letterSpacing:1,marginBottom:16,display:"flex",alignItems:"center",gap:6}}>
+          ← BACK
+        </button>
+        <div style={{background:"rgba(167,139,250,0.04)",border:"1px solid rgba(167,139,250,0.15)",borderRadius:12,padding:"20px"}}>
+          <div style={{fontSize:16,fontWeight:900,letterSpacing:2,color:"#a78bfa",marginBottom:18}}>{editMode?"✏️ EDIT CLIENT":"➕ NEW PT CLIENT"}</div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div className="field-group" style={{gridColumn:"1/-1"}}>
+              <div className="field-label">Client Name *</div>
+              <input type="text" placeholder="e.g. Rahul Sharma" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))}/>
+            </div>
+            <div className="field-group">
+              <div className="field-label">Phone Number</div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{color:"#25d366",fontWeight:700,fontSize:14}}>+91</span>
+                <input type="text" placeholder="9876543210" maxLength={10} value={form.phone||""} onChange={e=>setForm(p=>({...p,phone:e.target.value.replace(/[^0-9]/g,"").slice(0,10)}))} style={{flex:1}}/>
+              </div>
+            </div>
+            <div className="field-group">
+              <div className="field-label">Start Date</div>
+              <input type="date" value={form.startDate||today()} onChange={e=>setForm(p=>({...p,startDate:e.target.value}))}/>
+            </div>
+          </div>
+
+          <div className="field-group">
+            <div className="field-label">Fitness Goal</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
+              {GOALS.map(g=>(
+                <button key={g} onClick={()=>setForm(p=>({...p,goal:g}))}
+                  style={{cursor:"pointer",borderRadius:5,padding:"5px 11px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:11,letterSpacing:1,border:"1.5px solid",transition:"all 0.15s",
+                    background:form.goal===g?"rgba(167,139,250,0.2)":"rgba(255,255,255,0.03)",
+                    borderColor:form.goal===g?"#a78bfa":"rgba(255,255,255,0.08)",
+                    color:form.goal===g?"#a78bfa":"#6b7280"}}>
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="field-group">
+            <div className="field-label">Assigned Trainer *</div>
+            <select value={form.trainerId||""} onChange={e=>setForm(p=>({...p,trainerId:e.target.value}))} style={{color:"#e8edf2"}}>
+              <option value="">— Select Trainer —</option>
+              {staff.map(s=><option key={s.id} value={s.id}>{s.name} — {s.role}</option>)}
+            </select>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div className="field-group">
+              <div className="field-label">Session Package</div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <input type="number" min={1} max={365} value={form.totalSessions||12} onChange={e=>setForm(p=>({...p,totalSessions:Number(e.target.value)||12}))} style={{width:80,textAlign:"center",fontSize:18,fontWeight:700}}/>
+                <span style={{fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>sessions</span>
+              </div>
+            </div>
+            <div className="field-group">
+              <div className="field-label">Fee Amount (₹)</div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:16,color:"#ff8c00",fontWeight:700}}>₹</span>
+                <input type="number" placeholder="5000" value={form.feeAmount||""} onChange={e=>setForm(p=>({...p,feeAmount:e.target.value}))} style={{flex:1}}/>
+              </div>
+            </div>
+          </div>
+
+          <div className="field-group">
+            <div className="field-label">Fee Status</div>
+            <div style={{display:"flex",gap:8}}>
+              {[["Paid",true,"#00ff87"],["Pending",false,"#ff4d6d"]].map(([lbl,val,col])=>(
+                <button key={lbl} onClick={()=>setForm(p=>({...p,feePaid:val}))}
+                  style={{cursor:"pointer",flex:1,borderRadius:7,padding:"9px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:13,letterSpacing:1,border:"1.5px solid",transition:"all 0.15s",
+                    background:form.feePaid===val?`rgba(${val?"0,255,135":"255,77,109"},0.15)`:"rgba(255,255,255,0.03)",
+                    borderColor:form.feePaid===val?col:"rgba(255,255,255,0.08)",color:form.feePaid===val?col:"#6b7280"}}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="field-group">
+            <div className="field-label">Notes</div>
+            <textarea rows={2} placeholder="Any notes about the client..." value={form.notes||""} onChange={e=>setForm(p=>({...p,notes:e.target.value}))}/>
+          </div>
+
+          <button className="save-btn" style={{width:"100%",marginTop:4,background:"linear-gradient(135deg,#7c3aed,#a78bfa)"}} onClick={saveClient} disabled={saving}>
+            {saving?<><span className="spinner"></span>SAVING...</>:editMode?"UPDATE CLIENT":"ADD CLIENT"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── CLIENTS LIST VIEW ──
+  return(
+    <div>
+      {/* Summary stats */}
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+        {[["Total Clients",ptClients.length,"#a78bfa"],["Active",activeCount,"#00ff87"],["Completed",completedCount,"#60a5fa"],["Fee Pending",feesPending,"#ff4d6d"]].map(([l,v,col])=>(
+          <div key={l} className="stat-card" style={{flex:1,minWidth:70}}>
+            <div style={{fontSize:22,fontWeight:900,color:col,lineHeight:1}}>{v}</div>
+            <div style={{fontSize:9,color:"#6b7280",letterSpacing:1,marginTop:3,fontFamily:"'Barlow',sans-serif",textTransform:"uppercase"}}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
+        <div style={{display:"flex",gap:4}}>
+          {[["all","All"],["active","Active"],["completed","Done"]].map(([v,l])=>(
+            <button key={v} className={"pt-filter-btn"+(filterStatus===v?" active":"")} onClick={()=>setFilterStatus(v)}>{l}</button>
+          ))}
+        </div>
+        <select value={filterTrainer} onChange={e=>setFilterTrainer(e.target.value)} style={{flex:1,minWidth:120,color:"#e8edf2"}}>
+          <option value="all">All Trainers</option>
+          {staff.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        <button className="pt-add-btn" style={{width:"auto",padding:"7px 16px",marginBottom:0,fontSize:12}} onClick={()=>{resetForm();setForm(p=>({...p,trainerId:staff[0]?.id||""}));setView("add");}}>+ ADD CLIENT</button>
+      </div>
+
+      {filtered.length===0
+        ?<div className="empty"><div style={{fontSize:42,marginBottom:12}}>💪</div><div style={{fontSize:16,letterSpacing:2}}>NO PT CLIENTS YET</div><div style={{fontSize:12,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginTop:8}}>Tap + ADD CLIENT to get started</div></div>
+        :filtered.map((cl,i)=>{
+          const trainer=staff.find(s=>s.id===cl.trainerId);
+          const done=doneSessions(cl.id);
+          const missed=missedSessions(cl.id);
+          const total=Number(cl.totalSessions||0);
+          const pct=total>0?Math.round(done/total*100):0;
+          const isComplete=total>0&&done>=total;
+          return(
+            <div key={cl.id} className="pt-client-card" style={{animationDelay:`${i*0.05}s`,borderColor:isComplete?"rgba(96,165,250,0.3)":cl.feePaid?"rgba(255,255,255,0.07)":"rgba(255,77,109,0.15)",cursor:"pointer"}}
+              onClick={()=>{setSelClient(cl);setView("detail");}}>
+              <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+                <div style={{width:42,height:42,borderRadius:10,background:"rgba(167,139,250,0.12)",border:"1.5px solid rgba(167,139,250,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#a78bfa",flexShrink:0}}>{cl.name[0]?.toUpperCase()}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                    <div style={{fontSize:16,fontWeight:700}}>{cl.name}</div>
+                    {isComplete&&<span style={{fontSize:9,background:"rgba(96,165,250,0.15)",border:"1px solid #60a5fa",borderRadius:3,padding:"2px 6px",color:"#60a5fa",letterSpacing:1}}>COMPLETED</span>}
+                    {!cl.feePaid&&<span style={{fontSize:9,background:"rgba(255,77,109,0.12)",border:"1px solid rgba(255,77,109,0.3)",borderRadius:3,padding:"2px 6px",color:"#ff4d6d",letterSpacing:1}}>FEE DUE</span>}
+                  </div>
+                  <div style={{display:"flex",gap:8,marginTop:4,flexWrap:"wrap",alignItems:"center"}}>
+                    {trainer&&<span className="trainer-chip">&#x1F3CB; {trainer.name}</span>}
+                    {cl.goal&&<span className="pt-goal-badge">{cl.goal}</span>}
+                  </div>
+                  <div style={{marginTop:8}}>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginBottom:3}}>
+                      <span>{done}/{total} sessions</span>
+                      <span style={{color:isComplete?"#60a5fa":"#a78bfa",fontWeight:700}}>{pct}%</span>
+                    </div>
+                    <div className="pt-progress-bar">
+                      <div className="pt-progress-fill" style={{width:pct+"%",background:isComplete?"linear-gradient(90deg,#60a5fa,#3b82f6)":undefined}}/>
+                    </div>
+                  </div>
+                  {(missed>0||cl.feeAmount)&&<div style={{display:"flex",gap:10,marginTop:6,flexWrap:"wrap"}}>
+                    {missed>0&&<span className="pt-stat-pill" style={{color:"#ff4d6d"}}>{missed} missed</span>}
+                    {cl.feeAmount&&<span className="pt-stat-pill" style={{color:cl.feePaid?"#00ff87":"#ff4d6d"}}>₹{Number(cl.feeAmount).toLocaleString("en-IN")} {cl.feePaid?"paid":"due"}</span>}
+                    {cl.startDate&&<span className="pt-stat-pill" style={{color:"#4b5563",marginLeft:"auto"}}>since {new Date(cl.startDate+"T00:00:00").toLocaleDateString("en-IN",{day:"2-digit",month:"short"})}</span>}
+                  </div>}
+                </div>
+                <div style={{color:"#374151",fontSize:16}}>›</div>
+              </div>
+            </div>
+          );
+        })
+      }
+    </div>
+  );
+}
+
+
+/* ── GYM MANAGER ── */
+function GymManager({gymList, activeGymId, onSwitch, onSave, onClose}){
+  const [list, setList]   = useState(gymList.map(g=>({...g})));
+  const [saving, setSaving] = useState(false);
+  const addGym = () => setList(p=>[...p,{id:"gym_"+Date.now(),name:"",address:""}]);
+  const upd = (id,f,v) => setList(p=>p.map(g=>g.id===id?{...g,[f]:v}:g));
+  const del = (id) => { if(list.length<=1){alert("Must have at least one location!");return;} setList(p=>p.filter(g=>g.id!==id)); };
+  const doSave = async () => {
+    const valid=list.filter(g=>g.name.trim());
+    if(!valid.length){alert("Add at least one location!");return;}
+    setSaving(true); await onSave(valid); setSaving(false); onClose();
+  };
+  return(
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div className="modal-title" style={{color:"#60a5fa"}}>&#x1F3DB; Gym Locations</div>
+        <div style={{fontSize:11,color:"#4b5563",letterSpacing:2,fontFamily:"'Barlow',sans-serif",marginBottom:8}}>SWITCH LOCATION</div>
+        <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:20}}>
+          {list.filter(g=>g.name).map(g=>(
+            <button key={g.id} onClick={()=>{onSwitch(g.id);onClose();}} style={{cursor:"pointer",background:g.id===activeGymId?"rgba(96,165,250,0.15)":"rgba(255,255,255,0.03)",border:"1.5px solid "+(g.id===activeGymId?"#60a5fa":"rgba(255,255,255,0.08)"),borderRadius:10,padding:"12px 16px",textAlign:"left",transition:"all 0.15s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:18}}>&#x1F3CB;</span>
+                <div>
+                  <div style={{fontSize:14,fontWeight:700,color:g.id===activeGymId?"#60a5fa":"#e8edf2"}}>{g.name}</div>
+                  {g.address&&<div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginTop:2}}>{g.address}</div>}
+                </div>
+                {g.id===activeGymId&&<span style={{marginLeft:"auto",fontSize:10,color:"#60a5fa",border:"1px solid #60a5fa",borderRadius:4,padding:"2px 8px",fontWeight:700,letterSpacing:1}}>ACTIVE</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+        <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:16,marginBottom:12}}>
+          <div style={{fontSize:11,color:"#4b5563",letterSpacing:2,fontFamily:"'Barlow',sans-serif",marginBottom:10}}>MANAGE LOCATIONS</div>
+          {list.map((g,i)=>(
+            <div key={g.id} style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:8,padding:"12px",marginBottom:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <div style={{fontSize:11,color:"#60a5fa",letterSpacing:1,fontWeight:700}}>LOCATION #{i+1}</div>
+                <button className="icon-btn del-btn" onClick={()=>del(g.id)}>&#x1F5D1; Remove</button>
+              </div>
+              <div className="field-group"><div className="field-label">Gym Name</div><input type="text" placeholder="e.g. Surya Gym Kothrud" value={g.name} onChange={e=>upd(g.id,"name",e.target.value)}/></div>
+              <div className="field-group"><div className="field-label">Address (optional)</div><input type="text" placeholder="e.g. Kothrud, Pune" value={g.address||""} onChange={e=>upd(g.id,"address",e.target.value)}/></div>
+            </div>
+          ))}
+          <button className="add-staff-btn" style={{borderColor:"rgba(96,165,250,0.4)",color:"#60a5fa"}} onClick={addGym}>+ ADD NEW LOCATION</button>
+        </div>
+        <div style={{display:"flex",gap:10}}>
+          <button className="save-btn" style={{flex:1,padding:"12px",background:"linear-gradient(135deg,#1d4ed8,#3b82f6)"}} onClick={doSave} disabled={saving}>{saving?<><span className="spinner"></span>SAVING...</>:"SAVE LOCATIONS"}</button>
+          <button className="cancel-btn" onClick={onClose}>CANCEL</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── LOGIN GATE ── */
+function LoginGate({staff, onLogin}){
+  const [step, setStep]   = useState("choose"); // choose | owner-pin | staff-select | staff-pin
+  const [pin,  setPin]    = useState("");
+  const [selEmp, setSelEmp] = useState(null);
+  const [shake, setShake]   = useState(false);
+
+  const doShake = () => { setShake(true); setTimeout(()=>setShake(false),500); setPin(""); };
+
+  const pressNum = (n) => {
+    if(pin.length >= 4) return;
+    const next = pin + n;
+    setPin(next);
+    if(next.length === 4){
+      setTimeout(()=>{
+        if(step === "owner-pin"){
+          if(next === ADMIN_PASSWORD){ onLogin({role:"owner"}); }
+          else { doShake(); }
+        } else if(step === "staff-pin"){
+          if(selEmp && next === (selEmp.pin||"0000")){ onLogin({role:"staff", emp:selEmp}); }
+          else { doShake(); }
+        }
+      }, 200);
+    }
+  };
+
+  const del = () => setPin(p => p.slice(0,-1));
+
+  return(
+    <div className="login-wrap">
+      <div className="grid-bg"></div>
+      <div className="glow"></div>
+      <div className="login-box" style={{position:"relative",zIndex:1}}>
+        {/* Logo */}
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <div style={{fontSize:11,letterSpacing:4,color:"#ff4d00",fontWeight:700,marginBottom:4}}>SURYA GYM 2.0</div>
+          <div style={{fontSize:26,fontWeight:900,letterSpacing:2}}>STAFF PORTAL</div>
+          <div style={{width:40,height:3,background:"linear-gradient(90deg,#ff4d00,#ff8c00)",borderRadius:2,margin:"8px auto 0"}}></div>
+        </div>
+
+        {/* STEP 1: Choose role */}
+        {step==="choose" && (
+          <div>
+            <div style={{fontSize:12,color:"#4b5563",letterSpacing:2,fontFamily:"'Barlow',sans-serif",marginBottom:16,textAlign:"center"}}>SELECT YOUR ROLE</div>
+            <button className="login-role-btn login-role-owner" onClick={()=>{setStep("owner-pin");setPin("");}}>
+              <span style={{fontSize:22}}>👑</span>
+              <div><div style={{fontSize:16}}>OWNER / ADMIN</div><div style={{fontSize:11,color:"rgba(255,140,0,0.7)",fontWeight:400,fontFamily:"'Barlow',sans-serif",marginTop:2}}>Full access to all features</div></div>
+            </button>
+            <button className="login-role-btn login-role-staff" onClick={()=>{setStep("staff-select");setPin("");}}>
+              <span style={{fontSize:22}}>👤</span>
+              <div><div style={{fontSize:16}}>STAFF MEMBER</div><div style={{fontSize:11,color:"rgba(167,139,250,0.7)",fontWeight:400,fontFamily:"'Barlow',sans-serif",marginTop:2}}>View your attendance & apply leave</div></div>
+            </button>
+          </div>
+        )}
+
+        {/* STEP 2a: Owner PIN */}
+        {step==="owner-pin" && (
+          <div>
+            <div style={{textAlign:"center",marginBottom:4}}>
+              <div style={{fontSize:13,color:"#ff8c00",letterSpacing:2,fontFamily:"'Barlow',sans-serif"}}>OWNER PIN</div>
+            </div>
+            <div className="pin-display" style={{animation:shake?"shake 0.4s ease":undefined}}>
+              {[0,1,2,3].map(i=><div key={i} className={`pin-dot${pin.length>i?" filled":""}`}/>)}
+            </div>
+            <div className="pinpad">
+              {[1,2,3,4,5,6,7,8,9].map(n=>(
+                <button key={n} className="pin-btn" onClick={()=>pressNum(String(n))}>{n}</button>
+              ))}
+              <button className="pin-btn" style={{color:"#6b7280"}} onClick={()=>setStep("choose")}>←</button>
+              <button className="pin-btn zero" onClick={()=>pressNum("0")}>0</button>
+              <button className="pin-btn" style={{color:"#ff4d6d"}} onClick={del}>⌫</button>
+            </div>
+            {shake&&<div style={{textAlign:"center",color:"#ff4d6d",fontSize:12,fontFamily:"'Barlow',sans-serif",marginTop:12}}>Wrong PIN. Try again.</div>}
+          </div>
+        )}
+
+        {/* STEP 2b: Staff select */}
+        {step==="staff-select" && (
+          <div>
+            <div style={{fontSize:12,color:"#4b5563",letterSpacing:2,fontFamily:"'Barlow',sans-serif",marginBottom:14,textAlign:"center"}}>WHO ARE YOU?</div>
+            {staff.map(emp=>(
+              <button key={emp.id} className="login-role-btn login-role-staff" style={{marginBottom:8}} onClick={()=>{setSelEmp(emp);setStep("staff-pin");setPin("");}}>
+                <div style={{width:36,height:36,borderRadius:8,background:"rgba(167,139,250,0.15)",border:"1.5px solid rgba(167,139,250,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#a78bfa",flexShrink:0}}>{emp.avatar||makeAvatar(emp.name)}</div>
+                <div><div style={{fontSize:15}}>{emp.name}</div><div style={{fontSize:11,color:"rgba(167,139,250,0.6)",fontWeight:400,fontFamily:"'Barlow',sans-serif"}}>{emp.role} · {emp.shift}</div></div>
+              </button>
+            ))}
+            <button style={{background:"none",border:"none",color:"#4b5563",cursor:"pointer",width:"100%",marginTop:8,fontFamily:"'Barlow Condensed',sans-serif",fontSize:12,letterSpacing:1}} onClick={()=>setStep("choose")}>← BACK</button>
+          </div>
+        )}
+
+        {/* STEP 3: Staff PIN */}
+        {step==="staff-pin" && selEmp && (
+          <div>
+            <div style={{textAlign:"center",marginBottom:4}}>
+              <div style={{width:44,height:44,borderRadius:10,background:"rgba(167,139,250,0.15)",border:"1.5px solid rgba(167,139,250,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#a78bfa",margin:"0 auto 8px"}}>{selEmp.avatar||makeAvatar(selEmp.name)}</div>
+              <div style={{fontSize:14,fontWeight:700}}>{selEmp.name}</div>
+              <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{selEmp.role}</div>
+              <div style={{fontSize:11,color:"#a78bfa",letterSpacing:2,marginTop:8}}>ENTER YOUR PIN</div>
+            </div>
+            <div className="pin-display">
+              {[0,1,2,3].map(i=><div key={i} className={`pin-dot${pin.length>i?" filled":""}`} style={{borderColor:shake?"#ff4d6d":undefined,background:shake&&pin.length>i?"#ff4d6d":undefined}}/>)}
+            </div>
+            <div className="pinpad">
+              {[1,2,3,4,5,6,7,8,9].map(n=>(
+                <button key={n} className="pin-btn" onClick={()=>pressNum(String(n))}>{n}</button>
+              ))}
+              <button className="pin-btn" style={{color:"#6b7280"}} onClick={()=>{setStep("staff-select");setPin("");}}>←</button>
+              <button className="pin-btn zero" onClick={()=>pressNum("0")}>0</button>
+              <button className="pin-btn" style={{color:"#ff4d6d"}} onClick={del}>⌫</button>
+            </div>
+            {shake&&<div style={{textAlign:"center",color:"#ff4d6d",fontSize:12,fontFamily:"'Barlow',sans-serif",marginTop:12}}>Wrong PIN. Try again.</div>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── STAFF PORTAL ── */
+function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove, onReject, onLogout, ptClients, ptSessions, gymId, onSaveSession}){
+  const emp = session.emp;
+  const [portalTab, setPortalTab] = useState("dashboard");
+  const [allData, setAllData]     = useState({});
+  const [loadingData, setLoadingData] = useState(true);
+  const [dayData, setDayData]     = useState(null);
+  const [todayLoaded, setTodayLoaded] = useState(false);
+
+  // Load all attendance for this employee
+  useEffect(()=>{
+    if(!allDates.length){setLoadingData(false);return;}
+    setLoadingData(true);
+    Promise.all(allDates.map(d=>window._loadAttendance(d).then(data=>[d,data]))).then(results=>{
+      const map={};results.forEach(([d,data])=>{if(data)map[d]=data;});
+      setAllData(map);setLoadingData(false);
+    });
+  },[allDates]);
+
+  // Listen to today for punch in/out
+  useEffect(()=>{
+    const unsub = window._listenAttendance(today(), data=>{
+      setDayData(data||{statuses:{},shifts:{},notes:{},punchIn:{},punchOut:{}});
+      setTodayLoaded(true);
+    });
+    return ()=>unsub();
+  },[]);
+
+  const punchIn  = dayData?.punchIn?.[emp.id];
+  const punchOut = dayData?.punchOut?.[emp.id];
+  const todayStatus = dayData?.statuses?.[emp.id];
+
+  const doPunchIn = async () => {
+    if(punchIn) return;
+    const t = nowTimeShort();
+    const updated = {...(dayData||{}), punchIn:{...(dayData?.punchIn||{}),[emp.id]:t}, statuses:{...(dayData?.statuses||{}),[emp.id]:"Present"}};
+    await window._saveAttendance(today(), updated);
+    showToast("✓ Punched in at "+t);
+  };
+
+  const doPunchOut = async () => {
+    if(!punchIn||punchOut) return;
+    const t = nowTimeShort();
+    const updated = {...dayData, punchOut:{...(dayData?.punchOut||{}),[emp.id]:t}};
+    await window._saveAttendance(today(), updated);
+    showToast("✓ Punched out at "+t);
+  };
+
+  // Stats
+  let present=0,absent=0,halfDay=0,leave=0,totalMins=0;
+  Object.values(allData).forEach(data=>{
+    const s=(data?.statuses||{})[emp.id];
+    const pin=(data?.punchIn||{})[emp.id];
+    const pout=(data?.punchOut||{})[emp.id];
+    if(s==="Present"||s==="Half Day") present++;
+    if(s==="Absent") absent++;
+    if(s==="Half Day") halfDay++;
+    if(s==="Leave") leave++;
+    if(pin&&pout){
+      const pt=t=>{const[tm,ap]=t.split(" ");const[h,m]=(tm||"00:00").split(":").map(Number);let hr=h;if(ap==="PM"&&h!==12)hr+=12;if(ap==="AM"&&h===12)hr=0;return hr*60+m;};
+      const d=pt(pout)-pt(pin); if(d>0)totalMins+=d;
+    }
+  });
+  const total=present+absent+leave;
+  const rate=total?Math.round(present/total*100):0;
+  const myLeaves=leaveReqs.filter(r=>r.empId===emp.id).sort((a,b)=>b.submittedAt?.localeCompare(a.submittedAt||"")||0);
+
+  const STATUS_COLOR={Present:"#00ff87",Absent:"#ff4d6d","Half Day":"#ffd60a",Leave:"#a78bfa"};
+
+  return(
+    <div>
+      {/* Header */}
+      <div style={{marginBottom:20}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
+          <div style={{width:48,height:48,borderRadius:10,background:"rgba(167,139,250,0.15)",border:"1.5px solid rgba(167,139,250,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700,color:"#a78bfa",flexShrink:0}}>{emp.avatar||makeAvatar(emp.name)}</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:11,letterSpacing:3,color:"#a78bfa",fontWeight:700}}>STAFF PORTAL</div>
+            <div style={{fontSize:22,fontWeight:900,letterSpacing:1}}>{emp.name}</div>
+            <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{emp.role} · {emp.shift}</div>
+          </div>
+          <button onClick={onLogout} style={{cursor:"pointer",background:"rgba(255,77,109,0.1)",border:"1px solid rgba(255,77,109,0.3)",borderRadius:8,padding:"7px 12px",color:"#ff4d6d",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:12,letterSpacing:1}}>LOGOUT</button>
+        </div>
+        <div className="divider"/>
+      </div>
+
+      {/* Live Clock */}
+      <LiveClock/>
+
+      {/* Sub tabs */}
+      <div className="tabs-bar" style={{marginBottom:20}}>
+        {[["dashboard","Dashboard"],["myattend","My Attendance"],["pt","💪 My Clients"],["leave","Leave"]].map(([id,lbl])=>(
+          <button key={id} className={`tab-btn${portalTab===id?" active":""}`} onClick={()=>setPortalTab(id)}>{lbl}</button>
+        ))}
+      </div>
+
+      {/* DASHBOARD */}
+      {portalTab==="dashboard"&&(
+        <div>
+          {/* Today punch */}
+          <div style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"18px",marginBottom:16}}>
+            <div style={{fontSize:11,color:"#4b5563",letterSpacing:2,fontFamily:"'Barlow',sans-serif",marginBottom:12}}>TODAY — {fmtDate(today())}</div>
+            {todayStatus&&<div style={{marginBottom:12,display:"inline-block",background:`${STATUS_COLOR[todayStatus]}15`,border:`1px solid ${STATUS_COLOR[todayStatus]}`,borderRadius:6,padding:"4px 14px",fontSize:12,color:STATUS_COLOR[todayStatus],fontWeight:700,letterSpacing:1}}>{todayStatus.toUpperCase()}</div>}
+            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+              {!punchIn
+                ?<button className="punch-in-btn" style={{fontSize:13,padding:"10px 20px"}} onClick={doPunchIn}>🟢 PUNCH IN</button>
+                :<span className="punch-active" style={{fontSize:12,padding:"8px 14px"}}>🟢 IN: {punchIn}</span>
+              }
+              {punchIn&&!punchOut
+                ?<button className="punch-out-btn" style={{fontSize:13,padding:"10px 20px"}} onClick={doPunchOut}>🔴 PUNCH OUT</button>
+                :punchIn&&punchOut
+                ?<span style={{fontSize:12,color:"#ff4d6d",background:"rgba(255,77,109,0.08)",border:"1px solid rgba(255,77,109,0.2)",borderRadius:4,padding:"8px 14px"}}>🔴 OUT: {punchOut}</span>
+                :null
+              }
+              {punchIn&&!punchOut&&<DurationTicker punchIn={punchIn}/>}
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+            {[["Present",present,"#00ff87"],["Absent",absent,"#ff4d6d"],["Leave",leave,"#a78bfa"],["Attend %",rate+"%","#ff8c00"]].map(([l,v,c])=>(
+              <div key={l} className="portal-stat">
+                <div style={{fontSize:22,fontWeight:900,color:c,lineHeight:1}}>{v}</div>
+                <div style={{fontSize:9,color:"#4b5563",letterSpacing:1,fontFamily:"'Barlow',sans-serif",marginTop:3}}>{l}</div>
+              </div>
+            ))}
+          </div>
+          {totalMins>0&&<div style={{background:"rgba(255,214,10,0.06)",border:"1px solid rgba(255,214,10,0.15)",borderRadius:8,padding:"10px 16px",fontSize:13,color:"#ffd60a",fontFamily:"'Barlow',sans-serif",marginBottom:12}}>⏱ Total hours logged: <strong>{Math.floor(totalMins/60)}h {totalMins%60}m</strong></div>}
+          {/* PT Client Summary */}
+          {(()=>{
+            const myPTClients=(ptClients||[]).filter(cl=>cl.trainerId===emp.id);
+            if(!myPTClients.length)return null;
+            const ptSess=ptSessions||[];
+            const activePT=myPTClients.filter(cl=>ptSess.filter(s=>s.clientId===cl.id&&s.status==="done").length<Number(cl.totalSessions||0)).length;
+            const feePending=myPTClients.filter(cl=>!cl.feePaid).length;
+            return(<div onClick={()=>setPortalTab("pt")} style={{cursor:"pointer",background:"rgba(167,139,250,0.06)",border:"1px solid rgba(167,139,250,0.2)",borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",gap:14,transition:"border-color 0.2s"}} className="pt-client-card">
+              <div style={{fontSize:28}}>💪</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:700,color:"#a78bfa"}}>My PT Clients</div>
+                <div style={{fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginTop:2}}>{myPTClients.length} total · {activePT} active{feePending>0?" · "+feePending+" fee due":""}</div>
+              </div>
+              <div style={{color:"#a78bfa",fontSize:18}}>›</div>
+            </div>);
+          })()}
+        </div>
+      )}
+
+      {/* MY ATTENDANCE */}
+      {portalTab==="myattend"&&(
+        <div>
+          {loadingData
+            ?<div style={{textAlign:"center",padding:"40px 0"}}><span className="spinner"></span></div>
+            :Object.keys(allData).length===0
+            ?<div className="empty"><div style={{fontSize:42,marginBottom:12}}>📋</div><div style={{fontSize:16,letterSpacing:2}}>NO RECORDS YET</div></div>
+            :Object.keys(allData).sort((a,b)=>b.localeCompare(a)).map((d,i)=>{
+              const data=allData[d];
+              const s=(data?.statuses||{})[emp.id];
+              const pin2=(data?.punchIn||{})[emp.id];
+              const pout2=(data?.punchOut||{})[emp.id];
+              const col=s?STATUS_COLOR[s]:"#374151";
+              return(
+                <div key={d} style={{background:"rgba(255,255,255,0.025)",border:`1px solid ${col}25`,borderRadius:10,padding:"12px 16px",marginBottom:8,animation:"slide-in 0.3s ease both",animationDelay:`${i*0.04}s`}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div>
+                      <div style={{fontSize:14,fontWeight:700}}>{fmtDate(d)}</div>
+                      {pin2&&<div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginTop:2}}>In: {pin2}{pout2?" · Out: "+pout2:""}</div>}
+                    </div>
+                    {s?<span style={{background:`${col}15`,border:`1px solid ${col}`,borderRadius:5,padding:"3px 10px",fontSize:11,color:col,fontWeight:700,letterSpacing:1}}>{s.toUpperCase()}</span>
+                      :<span style={{color:"#374151",fontSize:11,fontFamily:"'Barlow',sans-serif"}}>Not marked</span>}
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
+      )}
+
+      {/* MY PT CLIENTS */}
+      {portalTab==="pt"&&(()=>{
+        const myClients=(ptClients||[]).filter(cl=>cl.trainerId===emp.id);
+        const ptSess=ptSessions||[];
+        const doneSess=(cid)=>ptSess.filter(s=>s.clientId===cid&&s.status==="done").length;
+        const missedSess=(cid)=>ptSess.filter(s=>s.clientId===cid&&s.status==="missed").length;
+        const getStatus=(cid,dt)=>(ptSess.find(s=>s.clientId===cid&&s.date===dt)||{}).status||"";
+        const toggleSess=async(cid,dt,cur)=>{
+          const id="pts_"+cid+"_"+dt;
+          const next=cur==="done"?"missed":cur==="missed"?"":"done";
+          await onSaveSession(id,{clientId:cid,date:dt,status:next||"none",id});
+        };
+        const last14=Array.from({length:14},(_,i)=>{const d=new Date();d.setDate(d.getDate()-13+i);return d.toISOString().split("T")[0];});
+        if(myClients.length===0)return(
+          <div className="empty"><div style={{fontSize:42,marginBottom:12}}>💪</div><div style={{fontSize:16,letterSpacing:2}}>NO CLIENTS ASSIGNED</div><div style={{fontSize:12,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginTop:8}}>Ask the owner to assign PT clients to you</div></div>
+        );
+        return(<div>
+          <div style={{fontSize:11,color:"#a78bfa",letterSpacing:2,marginBottom:12,fontWeight:700}}>MY PT CLIENTS — {myClients.length}</div>
+          {myClients.map((cl,ci)=>{
+            const done=doneSess(cl.id); const missed=missedSess(cl.id); const total=Number(cl.totalSessions||0);
+            const pct=total>0?Math.round(done/total*100):0;
+            return(<div key={cl.id} className="pt-client-card" style={{animationDelay:ci*0.05+"s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                <div style={{width:38,height:38,borderRadius:8,background:"rgba(167,139,250,0.12)",border:"1.5px solid rgba(167,139,250,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#a78bfa",flexShrink:0}}>{cl.name[0]?.toUpperCase()}</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:15,fontWeight:700}}>{cl.name}</div>
+                  <div style={{display:"flex",gap:6,marginTop:2,flexWrap:"wrap"}}>
+                    {cl.goal&&<span className="pt-goal-badge">{cl.goal}</span>}
+                    {cl.phone&&<button className="wa-btn" style={{padding:"2px 8px",fontSize:10}} onClick={()=>{const msg="Hi "+cl.name+"! Surya Gym 2.0 - Session reminder from "+emp.name+". See you today!";openWA(cl.phone,msg);}}>💬</button>}
+                  </div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:16,fontWeight:900,color:"#a78bfa"}}>{done}/{total}</div>
+                  <div style={{fontSize:9,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>sessions</div>
+                </div>
+              </div>
+              <div className="pt-progress-bar" style={{marginBottom:10}}>
+                <div className="pt-progress-fill" style={{width:pct+"%"}}/>
+              </div>
+              <div style={{fontSize:10,color:"#4b5563",letterSpacing:1,fontFamily:"'Barlow',sans-serif",marginBottom:6}}>LAST 14 DAYS — TAP TO MARK</div>
+              <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+                {last14.map(dt=>{
+                  const st=getStatus(cl.id,dt);
+                  const isFut=dt>today();
+                  const d=new Date(dt+"T00:00:00");
+                  return(<div key={dt} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
+                    <div style={{fontSize:7,color:dt===today()?"#ff4d00":"#374151",fontFamily:"'Barlow',sans-serif"}}>{d.getDate()}</div>
+                    <div className={"session-dot "+(st==="done"?"done":st==="missed"?"missed":"empty")}
+                      onClick={()=>!isFut&&toggleSess(cl.id,dt,st)}
+                      style={{opacity:isFut?0.25:1,cursor:isFut?"not-allowed":"pointer",width:22,height:22,fontSize:10}}>
+                      {st==="done"?"✓":st==="missed"?"✗":""}
+                    </div>
+                  </div>);
+                })}
+              </div>
+              {missed>0&&<div style={{marginTop:6,fontSize:10,color:"#ff4d6d",fontFamily:"'Barlow',sans-serif"}}>{missed} missed session{missed>1?"s":""}</div>}
+            </div>);
+          })}
+        </div>);
+      })()}
+
+      {/* LEAVE */}
+      {portalTab==="leave"&&(
+        <LeaveTab staff={staff} leaveReqs={myLeaves} showToast={showToast}
+          onApprove={onApprove} onReject={onReject}
+          restrictToEmp={emp.id}
+        />
+      )}
+    </div>
+  );
+}
+
+
+/* ── EXPORT TAB ── */
+function ExportTab({allDates, staff, salaryConfig, gymId, gymName}){
+  const now = new Date();
+  const [viewYear,  setViewYear]  = useState(now.getFullYear());
+  const [viewMonth, setViewMonth] = useState(now.getMonth());
+  const [allData,   setAllData]   = useState({});
+  const [loading,   setLoading]   = useState(false);
+  const [exporting, setExporting] = useState("");
+  const [preview,   setPreview]   = useState(null);
+
+  const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const monthKey = `${viewYear}-${String(viewMonth+1).padStart(2,"0")}`;
+  const monthLabel = `${MONTHS[viewMonth]} ${viewYear}`;
+
+  useEffect(()=>{
+    const mDates = allDates.filter(d=>d.startsWith(monthKey));
+    if(!mDates.length){setAllData({});setPreview(null);return;}
+    setLoading(true);
+    Promise.all(mDates.map(d=>window._loadAttendance(d).then(data=>[d,data]))).then(results=>{
+      const map={};results.forEach(([d,data])=>{if(data)map[d]=data;});
+      setAllData(map);
+      setLoading(false);
+      buildPreview(map);
+    });
+  },[viewYear,viewMonth,allDates]);
+
+  const calcEmpStats = (empId, data) => {
+    let p=0,a=0,h=0,l=0,totalMins=0;
+    Object.values(data).forEach(day=>{
+      const s=(day?.statuses||{})[empId];
+      const pin=(day?.punchIn||{})[empId];
+      const pout=(day?.punchOut||{})[empId];
+      if(s==="Present"||s==="Half Day") p++;
+      if(s==="Absent") a++;
+      if(s==="Half Day") h++;
+      if(s==="Leave") l++;
+      if(pin&&pout){
+        const pt=t=>{const[tm,ap]=t.split(" ");const[hh,mm]=(tm||"00:00").split(":").map(Number);let hr=hh;if(ap==="PM"&&hh!==12)hr+=12;if(ap==="AM"&&hh===12)hr=0;return hr*60+mm;};
+        const d=pt(pout)-pt(pin); if(d>0)totalMins+=d;
+      }
+    });
+    const salary = parseFloat(salaryConfig[empId])||0;
+    const workDays = 26;
+    const perDay = workDays>0?salary/workDays:0;
+    const net = Math.max(0, salary - a*perDay);
+    return{p,a,h,l,totalMins,salary,net,rate:((p+l)>0?Math.round(p/(p+a+l)*100):0)};
+  };
+
+  const buildPreview = (data) => {
+    const rows = staff.map(emp=>{
+      const s = calcEmpStats(emp.id, data);
+      return {
+        name: emp.name, role: emp.role, shift: emp.shift,
+        present: s.p, absent: s.a, halfDay: s.h, leave: s.l,
+        hours: `${Math.floor(s.totalMins/60)}h ${s.totalMins%60}m`,
+        rate: s.rate+"%",
+        salary: s.salary>0?"₹"+Math.round(s.net).toLocaleString("en-IN"):"—"
+      };
+    });
+    setPreview(rows);
+  };
+
+  // ── EXCEL EXPORT ──
+  const exportExcel = async () => {
+    setExporting("excel");
+    try {
+      const mDates = Object.keys(allData).sort();
+      const wb = XLSX.utils.book_new();
+
+      // Sheet 1: Monthly Summary
+      const summaryData = [
+        ["SURYA GYM 2.0 - ATTENDANCE REPORT", "", "", "", "", "", "", ""],
+        [`Month: ${monthLabel}`, "", `Generated: ${new Date().toLocaleDateString("en-IN")}`, "", "", "", "", ""],
+        [""],
+        ["Employee","Role","Shift","Present","Absent","Half Day","Leave","Hours Worked","Attend %","Net Salary"],
+        ...staff.map(emp=>{
+          const s=calcEmpStats(emp.id,allData);
+          return[emp.name,emp.role,emp.shift,s.p,s.a,s.h,s.l,
+            `${Math.floor(s.totalMins/60)}h ${s.totalMins%60}m`,
+            s.rate+"%",
+            s.salary>0?Math.round(s.net):""
+          ];
+        })
+      ];
+      const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
+      ws1["!cols"] = [{wch:20},{wch:14},{wch:22},{wch:9},{wch:9},{wch:10},{wch:8},{wch:14},{wch:10},{wch:12}];
+      ws1["A1"].s = {font:{bold:true,sz:14},fill:{fgColor:{rgb:"FF4D00"}}};
+      XLSX.utils.book_append_sheet(wb, ws1, "Monthly Summary");
+
+      // Sheet 2: Day-by-day attendance
+      const dayHeaders = ["Date",...staff.map(e=>e.name),...staff.map(e=>e.name+" (Punch In)"),...staff.map(e=>e.name+" (Punch Out)")];
+      const dayRows = mDates.map(d=>{
+        const day=allData[d]||{};
+        return[
+          fmtDate(d),
+          ...staff.map(e=>(day.statuses||{})[e.id]||"—"),
+          ...staff.map(e=>(day.punchIn||{})[e.id]||"—"),
+          ...staff.map(e=>(day.punchOut||{})[e.id]||"—"),
+        ];
+      });
+      const ws2 = XLSX.utils.aoa_to_sheet([dayHeaders,...dayRows]);
+      ws2["!cols"] = [{wch:22},...staff.map(()=>({wch:14})),...staff.map(()=>({wch:14})),...staff.map(()=>({wch:14}))];
+      XLSX.utils.book_append_sheet(wb, ws2, "Day-by-Day");
+
+      // Sheet 3: Payroll
+      const payData = [
+        ["SURYA GYM 2.0 - PAYROLL REPORT","","","","",""],
+        [`Month: ${monthLabel}`,"","","","",""],
+        [""],
+        ["Employee","Monthly Salary","Present Days","Absent Days","Deduction","Net Salary"],
+        ...staff.map(emp=>{
+          const s=calcEmpStats(emp.id,allData);
+          const perDay=s.salary>0?s.salary/26:0;
+          return[emp.name,s.salary>0?s.salary:"Not set",s.p,s.a,s.salary>0?Math.round(s.a*perDay):"",s.salary>0?Math.round(s.net):""];
+        }),
+        [""],
+        ["TOTAL","",staff.reduce((t,e)=>t+calcEmpStats(e.id,allData).p,0),staff.reduce((t,e)=>t+calcEmpStats(e.id,allData).a,0),"",
+          staff.reduce((t,e)=>{const s=calcEmpStats(e.id,allData);return t+(s.salary>0?Math.round(s.net):0);},0)]
+      ];
+      const ws3 = XLSX.utils.aoa_to_sheet(payData);
+      ws3["!cols"] = [{wch:20},{wch:16},{wch:14},{wch:14},{wch:14},{wch:14}];
+      XLSX.utils.book_append_sheet(wb, ws3, "Payroll");
+
+      XLSX.writeFile(wb, `SuryaGym_${monthLabel.replace(" ","_")}.xlsx`);
+    } catch(e){ console.error(e); alert("Export failed: "+e.message); }
+    setExporting("");
+  };
+
+  // ── PDF EXPORT ──
+  const exportPDF = async () => {
+    setExporting("pdf");
+    try {
+      const {jsPDF} = window.jspdf;
+      const doc = new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
+      const mDates = Object.keys(allData).sort();
+
+      // ── Page 1: Monthly Attendance Summary ──
+      doc.setFillColor(8,12,16);
+      doc.rect(0,0,297,210,"F");
+
+      // Header bar
+      doc.setFillColor(255,77,0);
+      doc.rect(0,0,297,18,"F");
+      doc.setTextColor(255,255,255);
+      doc.setFontSize(14);
+      doc.setFont("helvetica","bold");
+      doc.text("SURYA GYM 2.0  —  MONTHLY ATTENDANCE REPORT",14,12);
+      doc.setFontSize(9);
+      doc.text(monthLabel+"  |  Generated: "+new Date().toLocaleDateString("en-IN"),200,12,"right");
+
+      // Summary table
+      const summaryBody = staff.map(emp=>{
+        const s=calcEmpStats(emp.id,allData);
+        return[emp.name,emp.role,emp.shift,String(s.p),String(s.a),String(s.h),String(s.l),
+          `${Math.floor(s.totalMins/60)}h ${s.totalMins%60}m`,s.rate+"%",
+          s.salary>0?"Rs."+Math.round(s.net).toLocaleString("en-IN"):"—"];
+      });
+
+      doc.autoTable({
+        startY:24,
+        head:[["Employee","Role","Shift","Present","Absent","Half","Leave","Hours","Attend%","Net Salary"]],
+        body:summaryBody,
+        theme:"grid",
+        styles:{fillColor:[13,17,23],textColor:[232,237,242],fontSize:9,cellPadding:4},
+        headStyles:{fillColor:[255,77,0],textColor:[255,255,255],fontStyle:"bold",fontSize:9},
+        alternateRowStyles:{fillColor:[20,25,35]},
+        columnStyles:{0:{cellWidth:38},1:{cellWidth:22},2:{cellWidth:38},3:{cellWidth:16},4:{cellWidth:16},5:{cellWidth:14},6:{cellWidth:14},7:{cellWidth:20},8:{cellWidth:18},9:{cellWidth:26}},
+        margin:{left:14,right:14}
+      });
+
+      // Stats box
+      const totalPresent = staff.reduce((t,e)=>t+calcEmpStats(e.id,allData).p,0);
+      const totalAbsent  = staff.reduce((t,e)=>t+calcEmpStats(e.id,allData).a,0);
+      const totalPayroll = staff.reduce((t,e)=>{const s=calcEmpStats(e.id,allData);return t+(s.salary>0?Math.round(s.net):0);},0);
+      const yPos = doc.lastAutoTable.finalY + 8;
+      if(yPos < 180){
+        const boxes=[["Total Present Days",String(totalPresent)],[" Total Absent Days",String(totalAbsent)],["Total Payroll",totalPayroll>0?"Rs."+totalPayroll.toLocaleString("en-IN"):"—"],["Days Recorded",String(mDates.length)]];
+        boxes.forEach((b,i)=>{
+          const x=14+i*68;
+          doc.setFillColor(20,25,35); doc.roundedRect(x,yPos,62,18,2,2,"F");
+          doc.setFillColor(255,77,0); doc.roundedRect(x,yPos,62,4,2,2,"F");
+          doc.setTextColor(255,140,0); doc.setFontSize(14); doc.setFont("helvetica","bold");
+          doc.text(b[1],x+31,yPos+13,"center");
+          doc.setTextColor(107,114,128); doc.setFontSize(7); doc.setFont("helvetica","normal");
+          doc.text(b[0].toUpperCase(),x+31,yPos+17.5,"center");
+        });
+      }
+
+      // ── Page 2: Day-by-Day ──
+      doc.addPage("a4","landscape");
+      doc.setFillColor(8,12,16); doc.rect(0,0,297,210,"F");
+      doc.setFillColor(255,77,0); doc.rect(0,0,297,18,"F");
+      doc.setTextColor(255,255,255); doc.setFontSize(14); doc.setFont("helvetica","bold");
+      doc.text("DAY-BY-DAY ATTENDANCE  —  "+monthLabel,14,12);
+
+      const dayHead=[["Date",...staff.map(e=>e.name.split(" ")[0]),...staff.map(e=>e.name.split(" ")[0]+" In"),...staff.map(e=>e.name.split(" ")[0]+" Out")]];
+      const dayBody=mDates.map(d=>{
+        const day=allData[d]||{};
+        const s=(e)=>(day.statuses||{})[e.id]||"—";
+        const pin=(e)=>(day.punchIn||{})[e.id]||"—";
+        const pout=(e)=>(day.punchOut||{})[e.id]||"—";
+        return[new Date(d+"T00:00:00").toLocaleDateString("en-IN",{day:"2-digit",month:"short"}),...staff.map(s),...staff.map(pin),...staff.map(pout)];
+      });
+      doc.autoTable({
+        startY:24,head:dayHead,body:dayBody,theme:"grid",
+        styles:{fillColor:[13,17,23],textColor:[232,237,242],fontSize:8,cellPadding:3},
+        headStyles:{fillColor:[255,77,0],textColor:[255,255,255],fontStyle:"bold",fontSize:8},
+        alternateRowStyles:{fillColor:[20,25,35]},
+        margin:{left:14,right:14}
+      });
+
+      // ── Pages 3+: Individual payslips ──
+      staff.forEach(emp=>{
+        const s=calcEmpStats(emp.id,allData);
+        doc.addPage("a4","portrait");
+        doc.setFillColor(8,12,16); doc.rect(0,0,210,297,"F");
+
+        // Header
+        doc.setFillColor(255,77,0); doc.rect(0,0,210,22,"F");
+        doc.setTextColor(255,255,255); doc.setFontSize(16); doc.setFont("helvetica","bold");
+        doc.text("SURYA GYM 2.0",14,10);
+        doc.setFontSize(10); doc.setFont("helvetica","normal");
+        doc.text("SALARY SLIP  —  "+monthLabel,14,17);
+        doc.setFontSize(9); doc.text("Generated: "+new Date().toLocaleDateString("en-IN"),190,17,"right");
+
+        // Employee info box
+        doc.setFillColor(20,25,35); doc.roundedRect(14,28,182,28,3,3,"F");
+        doc.setFillColor(255,77,0); doc.rect(14,28,4,28,"F");
+        doc.setTextColor(232,237,242); doc.setFontSize(14); doc.setFont("helvetica","bold");
+        doc.text(emp.name,24,38);
+        doc.setFontSize(10); doc.setFont("helvetica","normal");
+        doc.setTextColor(107,114,128);
+        doc.text(emp.role+" · "+emp.shift,24,46);
+
+        // Attendance stats
+        doc.setTextColor(232,237,242); doc.setFontSize(11); doc.setFont("helvetica","bold");
+        doc.text("ATTENDANCE",14,68);
+        doc.setFillColor(255,77,0); doc.rect(14,70,40,1,"F");
+
+        const attendStats=[["Present",String(s.p),"#00ff87"],[" Absent",String(s.a),"#ff4d6d"],["Half Day",String(s.h),"#ffd60a"],["Leave",String(s.l),"#a78bfa"]];
+        attendStats.forEach((item,i)=>{
+          const x=14+i*47;
+          doc.setFillColor(20,25,35); doc.roundedRect(x,74,42,20,2,2,"F");
+          doc.setTextColor(232,237,242); doc.setFontSize(16); doc.setFont("helvetica","bold");
+          doc.text(item[1],x+21,87,"center");
+          doc.setTextColor(107,114,128); doc.setFontSize(7); doc.setFont("helvetica","normal");
+          doc.text(item[0].toUpperCase(),x+21,92,"center");
+        });
+
+        // Hours
+        if(s.totalMins>0){
+          doc.setFillColor(30,25,10); doc.roundedRect(14,100,182,14,2,2,"F");
+          doc.setTextColor(255,214,10); doc.setFontSize(10); doc.setFont("helvetica","bold");
+          doc.text("Total Hours Worked: "+Math.floor(s.totalMins/60)+"h "+s.totalMins%60+"m",14+8,109);
+        }
+
+        // Salary breakdown
+        const sy = s.totalMins>0?120:106;
+        doc.setTextColor(232,237,242); doc.setFontSize(11); doc.setFont("helvetica","bold");
+        doc.text("SALARY BREAKDOWN",14,sy);
+        doc.setFillColor(255,77,0); doc.rect(14,sy+2,60,1,"F");
+
+        if(s.salary>0){
+          const perDay=s.salary/26;
+          const deduction=Math.round(s.a*perDay);
+          const rows2=[
+            ["Monthly Salary","Rs."+s.salary.toLocaleString("en-IN")],
+            ["Per Day Rate (÷26 days)","Rs."+Math.round(perDay).toLocaleString("en-IN")],
+            ["Absent Deduction ("+s.a+" days)","- Rs."+deduction.toLocaleString("en-IN")],
+          ];
+          doc.autoTable({
+            startY:sy+6,
+            body:rows2,
+            theme:"plain",
+            styles:{fillColor:[13,17,23],textColor:[156,163,175],fontSize:10,cellPadding:4},
+            columnStyles:{0:{cellWidth:100},1:{cellWidth:80,halign:"right"}},
+            margin:{left:14,right:14}
+          });
+          // Net salary box
+          const ny=doc.lastAutoTable.finalY+4;
+          doc.setFillColor(255,77,0,0.2); doc.setFillColor(20,35,20);
+          doc.roundedRect(14,ny,182,20,3,3,"F");
+          doc.setFillColor(0,255,135); doc.rect(14,ny,4,20,"F");
+          doc.setTextColor(0,255,135); doc.setFontSize(11); doc.setFont("helvetica","bold");
+          doc.text("NET SALARY",22,ny+8);
+          doc.setFontSize(18);
+          doc.text("Rs."+Math.round(s.net).toLocaleString("en-IN"),190,ny+14,"right");
+          // Payment status reminder
+          doc.setTextColor(107,114,128); doc.setFontSize(8); doc.setFont("helvetica","normal");
+          doc.text("Attendance Rate: "+s.rate+"%  |  Surya Gym 2.0",14,ny+28);
+        } else {
+          doc.setTextColor(107,114,128); doc.setFontSize(10);
+          doc.text("Salary not configured. Please set salary in the Payroll tab.",14,sy+14);
+        }
+
+        // Footer
+        doc.setFillColor(20,20,20); doc.rect(0,283,210,14,"F");
+        doc.setTextColor(55,65,81); doc.setFontSize(8);
+        doc.text("Surya Gym 2.0  —  Staff Attendance & Payroll System",105,290,"center");
+      });
+
+      doc.save(`SuryaGym_${monthLabel.replace(" ","_")}.pdf`);
+    } catch(e){ console.error(e); alert("PDF export failed: "+e.message); }
+    setExporting("");
+  };
+
+  const recordedDays = Object.keys(allData).length;
+
+  return(
+    <div>
+      <div style={{marginBottom:20}}>
+        <div style={{fontSize:11,color:"#4b5563",letterSpacing:2,fontFamily:"'Barlow',sans-serif",marginBottom:8}}>SELECT MONTH TO EXPORT</div>
+        <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:4}}>
+          <button className="month-btn" onClick={()=>{if(viewMonth===0){setViewMonth(11);setViewYear(y=>y-1);}else setViewMonth(m=>m-1);}}>← PREV</button>
+          <div style={{flex:1,textAlign:"center",fontSize:20,fontWeight:900,letterSpacing:2}}>{monthLabel.toUpperCase()}</div>
+          <button className="month-btn" onClick={()=>{if(viewMonth===11){setViewMonth(0);setViewYear(y=>y+1);}else setViewMonth(m=>m+1);}}>NEXT →</button>
+        </div>
+        {loading
+          ?<div style={{textAlign:"center",padding:"10px 0",color:"#6b7280",fontFamily:"'Barlow',sans-serif",fontSize:12}}>Loading data...</div>
+          :<div style={{textAlign:"center",fontSize:12,color:recordedDays>0?"#00ff87":"#4b5563",fontFamily:"'Barlow',sans-serif"}}>{recordedDays>0?`✓ ${recordedDays} days recorded`:"No data for this month"}</div>
+        }
+      </div>
+
+      {/* Export buttons */}
+      <div className="export-card">
+        <div style={{fontSize:13,fontWeight:700,letterSpacing:2,color:"#e8edf2",marginBottom:4}}>📊 EXCEL EXPORT</div>
+        <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginBottom:14}}>3 sheets: Monthly Summary · Day-by-Day · Payroll — Opens in Excel, Google Sheets</div>
+        <button className="export-btn export-excel" onClick={exportExcel} disabled={!!exporting||recordedDays===0}>
+          <span style={{fontSize:22}}>📗</span>
+          <div>
+            <div>{exporting==="excel"?"⏳ Generating Excel...":"DOWNLOAD EXCEL (.xlsx)"}</div>
+            <div style={{fontSize:11,fontWeight:400,color:"rgba(0,196,84,0.6)",fontFamily:"'Barlow',sans-serif"}}>Attendance + Payroll + Day-by-Day</div>
+          </div>
+        </button>
+      </div>
+
+      <div className="export-card">
+        <div style={{fontSize:13,fontWeight:700,letterSpacing:2,color:"#e8edf2",marginBottom:4}}>📄 PDF EXPORT</div>
+        <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginBottom:14}}>3 pages: Summary Report · Day-by-Day · Individual Salary Slips per employee</div>
+        <button className="export-btn export-pdf" onClick={exportPDF} disabled={!!exporting||recordedDays===0}>
+          <span style={{fontSize:22}}>📕</span>
+          <div>
+            <div>{exporting==="pdf"?"⏳ Generating PDF...":"DOWNLOAD PDF"}</div>
+            <div style={{fontSize:11,fontWeight:400,color:"rgba(255,107,53,0.6)",fontFamily:"'Barlow',sans-serif"}}>Summary + Day-by-Day + Salary Slips</div>
+          </div>
+        </button>
+      </div>
+
+      {/* Preview table */}
+      {preview&&preview.length>0&&(
+        <div className="export-card">
+          <div style={{fontSize:12,fontWeight:700,letterSpacing:2,color:"#6b7280",marginBottom:10}}>PREVIEW — {monthLabel.toUpperCase()}</div>
+          <div className="preview-scroll">
+            <table className="preview-table">
+              <thead><tr>
+                {["Employee","Role","Present","Absent","Half Day","Leave","Hours","Attend%","Net Salary"].map(h=><th key={h}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {preview.map((row,i)=>(
+                  <tr key={i}>
+                    <td style={{color:"#e8edf2",fontWeight:600}}>{row.name}</td>
+                    <td>{row.role}</td>
+                    <td style={{color:"#00ff87",fontWeight:700}}>{row.present}</td>
+                    <td style={{color:"#ff4d6d",fontWeight:700}}>{row.absent}</td>
+                    <td style={{color:"#ffd60a"}}>{row.halfDay}</td>
+                    <td style={{color:"#a78bfa"}}>{row.leave}</td>
+                    <td style={{color:"#ffd60a"}}>{row.hours}</td>
+                    <td style={{color:"#ff8c00",fontWeight:700}}>{row.rate}</td>
+                    <td style={{color:"#00ff87",fontWeight:700}}>{row.salary}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {recordedDays===0&&!loading&&(
+        <div className="empty"><div style={{fontSize:42,marginBottom:12}}>📂</div><div style={{fontSize:16,letterSpacing:2}}>NO DATA FOR {monthLabel.toUpperCase()}</div><div style={{fontSize:12,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginTop:8}}>Mark attendance first, then export</div></div>
+      )}
+    </div>
+  );
+}
+
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
