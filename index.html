@@ -46,6 +46,15 @@
     window._listenPTClients   = (g,cb)         => onSnapshot(collection(db,P(g,"ptclients")),s=>cb(s.docs.map(d=>({id:d.id,...d.data()}))));
     window._savePTSession     = async (id,d,g) => await setDoc(doc(db,P(g,"ptsessions"),id),d);
     window._listenPTSessions  = (g,cb)         => onSnapshot(collection(db,P(g,"ptsessions")),s=>cb(s.docs.map(d=>({id:d.id,...d.data()}))));
+    // Members
+    window._saveMember       = async (id,d,g) => await setDoc(doc(db,P(g,"members"),id),d);
+    window._deleteMember     = async (id,g)   => { const {deleteDoc}=await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"); await deleteDoc(doc(db,P(g,"members"),id)); };
+    window._listenMembers    = (g,cb)         => onSnapshot(collection(db,P(g,"members")),s=>cb(s.docs.map(d=>({id:d.id,...d.data()}))));
+    window._saveMemberAttend = async (date,d,g) => await setDoc(doc(db,P(g,"memberattend"),date),d);
+    window._loadMemberAttend = async (date,g)   => { const s=await getDoc(doc(db,P(g,"memberattend"),date)); return s.exists()?s.data():null; };
+    window._listenMemberAttend=(date,g,cb)    => onSnapshot(doc(db,P(g,"memberattend"),date),s=>cb(s.exists()?s.data():null));
+    window._saveGymConfig    = async (d,g)    => await setDoc(doc(db,P(g,"config"),"gymconfig"),d);
+    window._listenGymConfig  = (g,cb)         => onSnapshot(doc(db,P(g,"config"),"gymconfig"),s=>cb(s.exists()?s.data():{}));
     window._fbReady = true;
     window.dispatchEvent(new Event("firebaseReady"));
   </script>
@@ -178,6 +187,28 @@
     .preview-table td{padding:7px 10px;border:1px solid rgba(255,255,255,0.05);color:#9ca3af;font-family:'Barlow',sans-serif}
     .preview-table tr:nth-child(even) td{background:rgba(255,255,255,0.02)}
     .preview-scroll{max-height:260px;overflow-y:auto;border-radius:8px;border:1px solid rgba(255,255,255,0.06)}
+
+    /* Members */
+    .member-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px 16px;margin-bottom:9px;cursor:pointer;transition:all 0.2s;animation:slide-in 0.3s ease both}
+    .member-card:hover{border-color:rgba(96,165,250,0.3);transform:translateY(-1px)}
+    .member-card.expiring{border-color:rgba(255,214,10,0.3);background:rgba(255,214,10,0.03)}
+    .member-card.expired{border-color:rgba(255,77,109,0.25);background:rgba(255,77,109,0.03)}
+    .member-card.active-ok{border-color:rgba(0,255,135,0.12)}
+    .pkg-badge{display:inline-block;border-radius:4px;padding:2px 8px;font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px}
+    .pkg-monthly{background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.3);color:#60a5fa}
+    .pkg-quarterly{background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);color:#a78bfa}
+    .pkg-halfyearly{background:rgba(0,255,135,0.1);border:1px solid rgba(0,255,135,0.25);color:#00ff87}
+    .pkg-yearly{background:rgba(255,214,10,0.1);border:1px solid rgba(255,214,10,0.25);color:#ffd60a}
+    .pkg-custom{background:rgba(255,140,0,0.1);border:1px solid rgba(255,140,0,0.25);color:#ff8c00}
+    .days-pill{display:inline-flex;align-items:center;gap:4px;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:700;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px}
+    .days-ok{background:rgba(0,255,135,0.1);color:#00ff87;border:1px solid rgba(0,255,135,0.25)}
+    .days-warn{background:rgba(255,214,10,0.1);color:#ffd60a;border:1px solid rgba(255,214,10,0.25)}
+    .days-expired{background:rgba(255,77,109,0.1);color:#ff4d6d;border:1px solid rgba(255,77,109,0.25)}
+    .member-avatar{width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;flex-shrink:0}
+    .rev-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px 12px;text-align:center;flex:1}
+    .announce-input{width:100%;min-height:80px;resize:vertical}
+    .member-section-title{font-size:11px;color:#4b5563;letter-spacing:2px;font-family:'Barlow Condensed',sans-serif;font-weight:700;margin-bottom:10px;margin-top:18px;text-transform:uppercase}
+
     /* Personal Training */
     .pt-client-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:15px 18px;margin-bottom:10px;transition:border-color 0.2s;animation:slide-in 0.3s ease both}
     .pt-client-card:hover{border-color:rgba(167,139,250,0.3)}
@@ -448,6 +479,9 @@ function App(){
   const [gymList,     setGymList]     = useState([{id:"gym_default",name:"Surya Gym 2.0",address:""}]);
   const [activeGymId, setActiveGymId] = useState("gym_default");
   const [showGymMgr,  setShowGymMgr]  = useState(false);
+  const [members,     setMembers]     = useState([]);
+  const [gymConfig,   setGymConfig]   = useState({});
+  const [memberAttend,setMemberAttend]= useState(null);
   const [ptClients,   setPtClients]   = useState([]);
   const [ptSessions,  setPtSessions]  = useState([]);
   const unsubRef  = useRef(null);
@@ -480,6 +514,8 @@ function App(){
     window._listenLeaveReqs(activeGymId,data=>setLeaveReqs(data||[]));
     window._listenPTClients(activeGymId,data=>setPtClients(data||[]));
     window._listenPTSessions(activeGymId,data=>setPtSessions(data||[]));
+    window._listenMembers(activeGymId,data=>setMembers(data||[]));
+    window._listenGymConfig(activeGymId,data=>setGymConfig(data||{}));
     return()=>{ if(unsubSRef.current)unsubSRef.current(); };
   },[fbReady,activeGymId]);
 
@@ -487,6 +523,7 @@ function App(){
     if(!fbReady)return;
     setLoading(true);
     if(unsubRef.current)unsubRef.current();
+    window._listenMemberAttend(date,activeGymId,data=>setMemberAttend(data));
     unsubRef.current=window._listenAttendance(date,activeGymId,data=>{
       setDayData(data||{statuses:{},shifts:Object.fromEntries(staff.map(e=>[e.id,e.shift])),notes:{},punchIn:{},punchOut:{}});
       setLoading(false);
@@ -531,6 +568,7 @@ function App(){
   const doSaveStaff=async(s)=>{ await window._saveStaff(s,activeGymId); setStaff(s); showToast("✓ Staff updated on all phones!"); };
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(null),3000);};
 
+  const todayCheckedIn = (memberAttend?.checked||[]).length;
   const stats={
     total:staff.length, marked:Object.keys(statuses).length,
     present:Object.values(statuses).filter(s=>s==="Present").length,
@@ -549,7 +587,18 @@ function App(){
 
   // Show login gate if no session
   if(!session) return(
-    <LoginGate staff={staff} onLogin={(s)=>setSession(s)}/>
+    <LoginGate staff={staff} members={members} onLogin={(s)=>setSession(s)}/>
+  );
+
+  // Member portal
+  if(session.role==="member") return(
+    <MemberPortal
+      member={session.member} members={members} gymConfig={gymConfig}
+      gymId={activeGymId} gymName={gymList.find(g=>g.id===activeGymId)?.name||"Surya Gym 2.0"}
+      onLogout={()=>setSession(null)}
+      onSaveMemberAttend={async(date,d)=>await window._saveMemberAttend(date,d,activeGymId)}
+      loadMemberAttend={(date)=>window._loadMemberAttend(date,activeGymId)}
+    />
   );
 
   // Show staff portal for staff role
@@ -645,7 +694,7 @@ function App(){
 
     {/* Tabs */}
     <div className="tabs-bar">
-      {[["mark","Mark Attendance"],["calendar","📅 Calendar"],["history","History"],["summary","Summary"],["payroll","💰 Payroll"],["leave","🏖 Leave"],["pt","💪 PT"],["export","📤 Export"]].map(([id,lbl])=>(
+      {[["mark","Mark Attendance"],["members","👥 Members"],["calendar","📅 Calendar"],["history","History"],["summary","Summary"],["payroll","💰 Payroll"],["leave","🏖 Leave"],["pt","💪 PT"],["revenue","📊 Revenue"],["export","📤 Export"]].map(([id,lbl])=>(
         <button key={id} className={`tab-btn${tab===id?" active":""}`} onClick={()=>setTab(id)}>{lbl}</button>
       ))}
     </div>
@@ -814,6 +863,17 @@ function App(){
       await window._saveLeaveReq(req.id,{...req,status:"rejected",updatedAt:new Date().toISOString()});
       showToast("✗ Leave rejected.");
     }}/>}
+
+    {tab==="members"&&<MembersTab
+      members={members} gymId={activeGymId} gymConfig={gymConfig} staff={staff}
+      memberAttend={memberAttend} date={date} showToast={showToast}
+      onSaveMember={async(id,d)=>await window._saveMember(id,d,activeGymId)}
+      onDeleteMember={async(id)=>await window._deleteMember(id,activeGymId)}
+      onSaveMemberAttend={async(date,d)=>await window._saveMemberAttend(date,d,activeGymId)}
+      onSaveGymConfig={async(d)=>{await window._saveGymConfig(d,activeGymId);setGymConfig(d);showToast("✓ Settings saved!");}}
+    />}
+
+    {tab==="revenue"&&<RevenueTab members={members} gymConfig={gymConfig} gymId={activeGymId} gymName={gymList.find(g=>g.id===activeGymId)?.name||"Surya Gym 2.0"} onSaveGymConfig={async(d)=>{await window._saveGymConfig(d,activeGymId);setGymConfig(d);showToast("✓ Settings saved!");}}/>}
 
     {tab==="pt"&&<PTTab staff={staff} ptClients={ptClients} ptSessions={ptSessions} gymId={activeGymId} showToast={showToast}
       onSaveClient={async(id,d)=>await window._savePTClient(id,d,activeGymId)}
@@ -1444,6 +1504,660 @@ function LeaveTab({staff,leaveReqs,showToast,onApprove,onReject,restrictToEmp,gy
 
 
 
+
+const PACKAGES = [
+  {name:"Monthly",   days:30,  cls:"pkg-monthly"},
+  {name:"Quarterly", days:90,  cls:"pkg-quarterly"},
+  {name:"Half-Yearly",days:180,cls:"pkg-halfyearly"},
+  {name:"Yearly",    days:365, cls:"pkg-yearly"},
+  {name:"Custom",    days:0,   cls:"pkg-custom"},
+];
+
+function daysLeft(expiryDate){
+  if(!expiryDate)return null;
+  const diff=Math.ceil((new Date(expiryDate+"T23:59:59")-new Date())/(1000*60*60*24));
+  return diff;
+}
+
+function memberStatus(m){
+  const d=daysLeft(m.expiryDate);
+  if(d===null)return "unknown";
+  if(d<0)return "expired";
+  if(d<=7)return "expiring";
+  return "active";
+}
+
+function pkgClass(pkgName){
+  const p=PACKAGES.find(p=>p.name===pkgName);
+  return p?p.cls:"pkg-custom";
+}
+
+function calcExpiry(startDate,pkgName,customDays){
+  const p=PACKAGES.find(p=>p.name===pkgName);
+  const days=pkgName==="Custom"?Number(customDays||30):(p?.days||30);
+  const d=new Date(startDate+"T00:00:00");
+  d.setDate(d.getDate()+days-1);
+  return d.toISOString().split("T")[0];
+}
+
+/* ── MEMBERS TAB ── */
+function MembersTab({members, gymId, gymConfig, staff, memberAttend, date, showToast, onSaveMember, onDeleteMember, onSaveMemberAttend}){
+  const [view,      setView]    = useState("list"); // list | add | detail | announce | checkin
+  const [selMember, setSelMember] = useState(null);
+  const [filter,    setFilter]   = useState("all"); // all|active|expiring|expired
+  const [searchQ,   setSearchQ]  = useState("");
+  const [saving,    setSaving]   = useState(false);
+  const [form,      setForm]     = useState({name:"",phone:"",pin:"",dob:"",goal:"",package:"Monthly",startDate:today(),customDays:30,feeAmount:"",feePaid:false,notes:"",trainerId:""});
+  const [editMode,  setEditMode] = useState(false);
+  const [announce,  setAnnounce] = useState("");
+  const [checkedIn, setCheckedIn]= useState([]);
+
+  useEffect(()=>{
+    if(memberAttend)setCheckedIn(memberAttend.checked||[]);
+  },[memberAttend]);
+
+  const resetForm=()=>setForm({name:"",phone:"",pin:"",dob:"",goal:"",package:"Monthly",startDate:today(),customDays:30,feeAmount:"",feePaid:false,notes:"",trainerId:""});
+
+  const saveMember=async()=>{
+    if(!form.name.trim()){showToast("Enter member name!");return;}
+    if(!form.phone||form.phone.length!==10){showToast("Enter valid 10-digit phone!");return;}
+    setSaving(true);
+    const id=editMode?selMember.id:"mem_"+Date.now();
+    const expiry=calcExpiry(form.startDate||today(),form.package,form.customDays);
+    const pin=form.pin||form.phone.slice(-4);
+    const data={...form,id,pin,expiryDate:expiry,updatedAt:new Date().toISOString(),createdAt:editMode?selMember.createdAt:new Date().toISOString()};
+    await onSaveMember(id,data);
+    showToast(editMode?"✓ Member updated!":"✓ Member added!");
+    setSaving(false); resetForm(); setEditMode(false); setView("list");
+  };
+
+  const deleteMember=async(m)=>{
+    if(!window.confirm("Remove "+m.name+"?"))return;
+    await onDeleteMember(m.id); showToast("Member removed."); setView("list");
+  };
+
+  const toggleCheckIn=async(memberId)=>{
+    const updated=checkedIn.includes(memberId)?checkedIn.filter(x=>x!==memberId):[...checkedIn,memberId];
+    setCheckedIn(updated);
+    await onSaveMemberAttend(date,{checked:updated,updatedAt:new Date().toISOString()});
+  };
+
+  const sendExpiry=(m,days)=>{
+    const msg="Hi "+m.name+"!\n\nThis is a reminder from Surya Gym 2.0.\n\nYour "+m.package+" membership "+(days<=0?"has EXPIRED!":"expires in "+days+" day"+(days>1?"s":"!"))+"\nExpiry: "+fmtDate(m.expiryDate)+"\n\nRenew now to continue your fitness journey!\n\nSurya Gym 2.0";
+    openWA(m.phone,msg);
+  };
+
+  const sendBulkAnnounce=()=>{
+    if(!announce.trim()){showToast("Write a message first!");return;}
+    const active=members.filter(m=>memberStatus(m)!=="expired"&&m.phone);
+    if(!active.length){showToast("No active members with phone numbers!");return;}
+    active.forEach(m=>{
+      const msg="Hi "+m.name+"!\n\n"+announce+"\n\nSurya Gym 2.0";
+      openWA(m.phone,msg);
+    });
+    showToast("WhatsApp opened for "+active.length+" members!");
+    setAnnounce(""); setView("list");
+  };
+
+  // Stats
+  const activeCount   = members.filter(m=>memberStatus(m)==="active").length;
+  const expiringCount = members.filter(m=>memberStatus(m)==="expiring").length;
+  const expiredCount  = members.filter(m=>memberStatus(m)==="expired").length;
+  const totalRevenue  = members.filter(m=>m.feePaid).reduce((s,m)=>s+Number(m.feeAmount||0),0);
+
+  const filtered=members.filter(m=>{
+    if(filter!=="all"&&memberStatus(m)!==filter)return false;
+    if(searchQ&&!m.name.toLowerCase().includes(searchQ.toLowerCase())&&!m.phone?.includes(searchQ))return false;
+    return true;
+  }).sort((a,b)=>daysLeft(a.expiryDate)-daysLeft(b.expiryDate));
+
+  // ── CHECKIN VIEW ──
+  if(view==="checkin"){
+    return(
+      <div>
+        <button onClick={()=>setView("list")} style={{background:"none",border:"none",color:"#6b7280",cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,letterSpacing:1,marginBottom:16,display:"flex",alignItems:"center",gap:6}}>← BACK</button>
+        <div style={{fontSize:14,fontWeight:700,letterSpacing:2,color:"#00ff87",marginBottom:4}}>MEMBER CHECK-IN</div>
+        <div style={{fontSize:11,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginBottom:16}}>📅 {fmtDate(date)} — Tap to mark check-in</div>
+        {members.filter(m=>memberStatus(m)!=="expired").map(m=>{
+          const isIn=checkedIn.includes(m.id);
+          const dl=daysLeft(m.expiryDate);
+          return(
+            <div key={m.id} onClick={()=>toggleCheckIn(m.id)} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderRadius:10,marginBottom:8,cursor:"pointer",
+              background:isIn?"rgba(0,255,135,0.08)":"rgba(255,255,255,0.025)",
+              border:"1.5px solid "+(isIn?"#00ff87":"rgba(255,255,255,0.07)"),transition:"all 0.15s"}}>
+              <div style={{width:36,height:36,borderRadius:8,background:isIn?"rgba(0,255,135,0.15)":"rgba(255,255,255,0.05)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:isIn?"#00ff87":"#6b7280",border:"1.5px solid "+(isIn?"rgba(0,255,135,0.3)":"rgba(255,255,255,0.07)")}}>{m.name[0]?.toUpperCase()}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:700}}>{m.name}</div>
+                <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{m.package} · {dl>=0?dl+" days left":"expired"}</div>
+              </div>
+              <div style={{fontSize:20}}>{isIn?"✅":"⬜"}</div>
+            </div>
+          );
+        })}
+        <div style={{marginTop:12,fontSize:11,color:"#4b5563",fontFamily:"'Barlow',sans-serif",textAlign:"center"}}>{checkedIn.length} members checked in today</div>
+      </div>
+    );
+  }
+
+  // ── ANNOUNCE VIEW ──
+  if(view==="announce"){
+    const activeMembers=members.filter(m=>memberStatus(m)!=="expired");
+    return(
+      <div>
+        <button onClick={()=>setView("list")} style={{background:"none",border:"none",color:"#6b7280",cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,letterSpacing:1,marginBottom:16,display:"flex",alignItems:"center",gap:6}}>← BACK</button>
+        <div style={{background:"rgba(37,211,102,0.04)",border:"1px solid rgba(37,211,102,0.2)",borderRadius:12,padding:"20px"}}>
+          <div style={{fontSize:16,fontWeight:900,letterSpacing:2,color:"#25d366",marginBottom:4}}>📢 GYM ANNOUNCEMENT</div>
+          <div style={{fontSize:11,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginBottom:16}}>Message will be sent to all {activeMembers.length} active members via WhatsApp</div>
+          <div className="field-group">
+            <div className="field-label">Message</div>
+            <textarea className="announce-input" placeholder={"e.g. Gym will be closed on 26th January for Republic Day.\n\nWish you a Happy Republic Day!🇮🇳"} value={announce} onChange={e=>setAnnounce(e.target.value)}/>
+          </div>
+          {/* Quick templates */}
+          <div style={{fontSize:11,color:"#4b5563",letterSpacing:1,fontFamily:"'Barlow',sans-serif",marginBottom:8}}>QUICK TEMPLATES:</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>
+            {[
+              ["Holiday Notice","Gym will be closed on {date}. We apologize for the inconvenience."],
+              ["New Batch","We are starting a new batch from {date}. Timings: {time}. Limited slots!"],
+              ["Fee Reminder","Your monthly fee is due. Please clear your dues at the earliest."],
+              ["Festive Wishes","Wishing you and your family a very Happy {festival}! 🎉"],
+            ].map(([title,tmpl])=>(
+              <button key={title} onClick={()=>setAnnounce(tmpl)} style={{cursor:"pointer",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:7,padding:"8px 14px",textAlign:"left",fontFamily:"'Barlow',sans-serif",fontSize:12,color:"#6b7280",transition:"all 0.15s"}}>
+                <span style={{color:"#e8edf2",fontWeight:700}}>{title}:</span> {tmpl.slice(0,60)}...
+              </button>
+            ))}
+          </div>
+          <button className="wa-bulk-btn" style={{width:"100%",justifyContent:"center",padding:"13px",fontSize:14}} onClick={sendBulkAnnounce}>
+            📱 SEND TO ALL {activeMembers.length} ACTIVE MEMBERS
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── ADD/EDIT FORM ──
+  if(view==="add"){
+    const pkg=PACKAGES.find(p=>p.name===form.package)||PACKAGES[0];
+    const previewExpiry=form.startDate?calcExpiry(form.startDate,form.package,form.customDays):"";
+    return(
+      <div>
+        <button onClick={()=>{setView("list");resetForm();setEditMode(false);}} style={{background:"none",border:"none",color:"#6b7280",cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,letterSpacing:1,marginBottom:16,display:"flex",alignItems:"center",gap:6}}>← BACK</button>
+        <div style={{background:"rgba(96,165,250,0.04)",border:"1px solid rgba(96,165,250,0.15)",borderRadius:12,padding:"20px"}}>
+          <div style={{fontSize:16,fontWeight:900,letterSpacing:2,color:"#60a5fa",marginBottom:18}}>{editMode?"✏️ EDIT MEMBER":"➕ NEW MEMBER"}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div className="field-group" style={{gridColumn:"1/-1"}}>
+              <div className="field-label">Full Name *</div>
+              <input type="text" placeholder="e.g. Rahul Sharma" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))}/>
+            </div>
+            <div className="field-group">
+              <div className="field-label">Phone Number *</div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{color:"#25d366",fontWeight:700,fontSize:14}}>+91</span>
+                <input type="tel" placeholder="9876543210" maxLength={10} value={form.phone||""} onChange={e=>setForm(p=>({...p,phone:e.target.value.replace(/[^0-9]/g,"").slice(0,10)}))} style={{flex:1}}/>
+              </div>
+            </div>
+            <div className="field-group">
+              <div className="field-label">Member PIN</div>
+              <input type="text" maxLength={4} placeholder="Default: last 4 of phone" value={form.pin||""} onChange={e=>setForm(p=>({...p,pin:e.target.value.replace(/[^0-9]/g,"").slice(0,4)}))} style={{letterSpacing:6,fontSize:18,fontWeight:700}}/>
+              <div style={{fontSize:9,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginTop:3}}>Leave blank to use last 4 digits of phone</div>
+            </div>
+            <div className="field-group">
+              <div className="field-label">Date of Birth</div>
+              <input type="date" value={form.dob||""} onChange={e=>setForm(p=>({...p,dob:e.target.value}))}/>
+            </div>
+          </div>
+          <div className="field-group">
+            <div className="field-label">Fitness Goal</div>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              {["Weight Loss","Muscle Gain","General Fitness","Cardio","Flexibility","Other"].map(g=>(
+                <button key={g} onClick={()=>setForm(p=>({...p,goal:g}))} style={{cursor:"pointer",borderRadius:5,padding:"5px 10px",fontSize:11,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,letterSpacing:1,border:"1.5px solid",transition:"all 0.15s",
+                  background:form.goal===g?"rgba(96,165,250,0.2)":"rgba(255,255,255,0.03)",
+                  borderColor:form.goal===g?"#60a5fa":"rgba(255,255,255,0.08)",
+                  color:form.goal===g?"#60a5fa":"#6b7280"}}>{g}</button>
+              ))}
+            </div>
+          </div>
+          <div className="field-group">
+            <div className="field-label">Package *</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {PACKAGES.map(pkg=>(
+                <button key={pkg.name} onClick={()=>setForm(p=>({...p,package:pkg.name}))} style={{cursor:"pointer",flex:1,minWidth:80,borderRadius:7,padding:"9px 6px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:12,letterSpacing:1,border:"1.5px solid",transition:"all 0.15s",textAlign:"center",
+                  background:form.package===pkg.name?"rgba(96,165,250,0.15)":"rgba(255,255,255,0.03)",
+                  borderColor:form.package===pkg.name?"#60a5fa":"rgba(255,255,255,0.08)",
+                  color:form.package===pkg.name?"#60a5fa":"#6b7280"}}>
+                  {pkg.name}{pkg.days?"\n"+pkg.days+"d":""}
+                </button>
+              ))}
+            </div>
+            {form.package==="Custom"&&(
+              <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
+                <input type="number" min={1} max={730} value={form.customDays||30} onChange={e=>setForm(p=>({...p,customDays:Number(e.target.value)||30}))} style={{width:80,textAlign:"center",fontSize:18,fontWeight:700}}/>
+                <span style={{fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>days</span>
+              </div>
+            )}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div className="field-group">
+              <div className="field-label">Start Date</div>
+              <input type="date" value={form.startDate||today()} onChange={e=>setForm(p=>({...p,startDate:e.target.value}))}/>
+            </div>
+            <div className="field-group">
+              <div className="field-label">Expiry (auto)</div>
+              <div style={{padding:"10px 12px",background:"rgba(0,0,0,0.2)",borderRadius:6,fontSize:14,fontWeight:700,color:"#ffd60a"}}>{previewExpiry?fmtDate(previewExpiry):"—"}</div>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div className="field-group">
+              <div className="field-label">Fee Amount (₹)</div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:16,color:"#ff8c00",fontWeight:700}}>₹</span>
+                <input type="number" placeholder="1500" value={form.feeAmount||""} onChange={e=>setForm(p=>({...p,feeAmount:e.target.value}))} style={{flex:1}}/>
+              </div>
+            </div>
+            <div className="field-group">
+              <div className="field-label">Fee Status</div>
+              <div style={{display:"flex",gap:6}}>
+                {[["Paid",true,"#00ff87"],["Pending",false,"#ff4d6d"]].map(([l,v,col])=>(
+                  <button key={l} onClick={()=>setForm(p=>({...p,feePaid:v}))} style={{cursor:"pointer",flex:1,borderRadius:7,padding:"9px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:12,letterSpacing:1,border:"1.5px solid",transition:"all 0.15s",
+                    background:form.feePaid===v?`rgba(${v?"0,255,135":"255,77,109"},0.15)`:"rgba(255,255,255,0.03)",
+                    borderColor:form.feePaid===v?col:"rgba(255,255,255,0.08)",color:form.feePaid===v?col:"#6b7280"}}>{l}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+          {staff&&staff.length>0&&<div className="field-group">
+            <div className="field-label">Assigned Trainer (optional)</div>
+            <select value={form.trainerId||""} onChange={e=>setForm(p=>({...p,trainerId:e.target.value}))} style={{color:"#e8edf2"}}>
+              <option value="">— No Trainer —</option>
+              {staff.map(s=><option key={s.id} value={s.id}>{s.name} — {s.role}</option>)}
+            </select>
+          </div>}
+          <div className="field-group">
+            <div className="field-label">Notes</div>
+            <textarea rows={2} placeholder="Any notes..." value={form.notes||""} onChange={e=>setForm(p=>({...p,notes:e.target.value}))}/>
+          </div>
+          <button className="save-btn" style={{width:"100%",marginTop:4,background:"linear-gradient(135deg,#1d4ed8,#60a5fa)"}} onClick={saveMember} disabled={saving}>
+            {saving?<><span className="spinner"></span>SAVING...</>:editMode?"UPDATE MEMBER":"ADD MEMBER"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── MEMBER DETAIL ──
+  if(view==="detail"&&selMember){
+    const m=members.find(x=>x.id===selMember.id)||selMember;
+    const dl=daysLeft(m.expiryDate);
+    const st=memberStatus(m);
+    const trainer=staff?.find(s=>s.id===m.trainerId);
+    return(
+      <div>
+        <button onClick={()=>{setView("list");setSelMember(null);}} style={{background:"none",border:"none",color:"#6b7280",cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,letterSpacing:1,marginBottom:16,display:"flex",alignItems:"center",gap:6}}>← BACK</button>
+        <div style={{background:"rgba(96,165,250,0.04)",border:"1px solid rgba(96,165,250,0.2)",borderRadius:14,padding:"18px",marginBottom:12}}>
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+            <div style={{display:"flex",gap:12,alignItems:"center"}}>
+              <div className="member-avatar" style={{background:"rgba(96,165,250,0.12)",border:"1.5px solid rgba(96,165,250,0.3)",color:"#60a5fa",width:54,height:54,fontSize:20,borderRadius:13}}>{m.name[0]?.toUpperCase()}</div>
+              <div>
+                <div style={{fontSize:20,fontWeight:900}}>{m.name}</div>
+                {m.phone&&<div style={{fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>📱 {m.phone}</div>}
+                {m.goal&&<span className="pt-goal-badge" style={{marginTop:4,display:"inline-block"}}>{m.goal}</span>}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+              <button onClick={()=>{setForm({...m});setEditMode(true);setView("add");}} style={{cursor:"pointer",background:"rgba(255,140,0,0.1)",border:"1px solid rgba(255,140,0,0.3)",borderRadius:6,padding:"6px 12px",color:"#ff8c00",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:11,letterSpacing:1}}>✏️ EDIT</button>
+              <button onClick={()=>deleteMember(m)} style={{cursor:"pointer",background:"rgba(255,77,109,0.1)",border:"1px solid rgba(255,77,109,0.3)",borderRadius:6,padding:"6px 12px",color:"#ff4d6d",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:11,letterSpacing:1}}>🗑 DELETE</button>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,marginTop:14,flexWrap:"wrap"}}>
+            <span className={"pkg-badge "+pkgClass(m.package)}>{m.package}</span>
+            <span className={"days-pill "+(st==="active"?"days-ok":st==="expiring"?"days-warn":"days-expired")}>
+              {dl>=0?dl+" days left":"Expired "+Math.abs(dl)+"d ago"}
+            </span>
+            {m.feePaid?<span style={{fontSize:11,color:"#00ff87",fontWeight:700}}>✓ Fee Paid</span>:<span style={{fontSize:11,color:"#ff4d6d",fontWeight:700}}>⏳ Fee Pending</span>}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:14}}>
+            {[["Start",fmtDate(m.startDate),"#60a5fa"],["Expiry",fmtDate(m.expiryDate),st==="active"?"#00ff87":st==="expiring"?"#ffd60a":"#ff4d6d"],["Fee","₹"+Number(m.feeAmount||0).toLocaleString("en-IN"),"#ff8c00"],["Trainer",trainer?.name||"None","#a78bfa"]].map(([l,v,col])=>(
+              <div key={l} style={{background:"rgba(0,0,0,0.2)",borderRadius:7,padding:"8px 12px"}}>
+                <div style={{fontSize:9,color:"#4b5563",letterSpacing:1,fontFamily:"'Barlow',sans-serif",textTransform:"uppercase"}}>{l}</div>
+                <div style={{fontSize:14,fontWeight:700,color:col,marginTop:2}}>{v}</div>
+              </div>
+            ))}
+          </div>
+          {m.notes&&<div style={{marginTop:10,fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif",fontStyle:"italic",padding:"7px 10px",background:"rgba(255,255,255,0.03)",borderRadius:6}}>"{m.notes}"</div>}
+        </div>
+        {/* Actions */}
+        {m.phone&&<div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+          <button className="wa-btn" style={{flex:1,justifyContent:"center",padding:"10px"}} onClick={()=>sendExpiry(m,dl)}>
+            💬 {st==="expired"?"Expired Notice":"Expiry Reminder"}
+          </button>
+          <button className="wa-btn" style={{flex:1,justifyContent:"center",padding:"10px"}} onClick={()=>{
+            const msg="Hi "+m.name+"!\n\nThank you for being a valued member of Surya Gym 2.0.\n\nYour membership has been renewed:\nPackage: "+m.package+"\nExpiry: "+fmtDate(m.expiryDate)+"\nFee: ₹"+Number(m.feeAmount||0).toLocaleString("en-IN")+(m.feePaid?" (PAID)":"")+"\n\nKeep up the great work!\nSurya Gym 2.0";
+            openWA(m.phone,msg);
+          }}>💬 Renewal Receipt</button>
+        </div>}
+      </div>
+    );
+  }
+
+  // ── LIST VIEW ──
+  const expiringMembers=members.filter(m=>{const dl=daysLeft(m.expiryDate);return dl!==null&&dl>=0&&dl<=7;});
+  return(
+    <div>
+      {/* Top stats */}
+      <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+        {[["Total",members.length,"#60a5fa"],["Active",activeCount,"#00ff87"],["Expiring",expiringCount,"#ffd60a"],["Expired",expiredCount,"#ff4d6d"]].map(([l,v,col])=>(
+          <div key={l} className="stat-card" style={{flex:1,minWidth:60,cursor:l!=="Total"?"pointer":undefined}} onClick={()=>l!=="Total"&&setFilter(l.toLowerCase())}>
+            <div style={{fontSize:22,fontWeight:900,color:col,lineHeight:1}}>{v}</div>
+            <div style={{fontSize:9,color:"#6b7280",letterSpacing:1,marginTop:3,fontFamily:"'Barlow',sans-serif",textTransform:"uppercase"}}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Expiry alerts */}
+      {expiringMembers.length>0&&(
+        <div style={{background:"rgba(255,214,10,0.05)",border:"1px solid rgba(255,214,10,0.25)",borderRadius:10,padding:"12px 14px",marginBottom:14}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#ffd60a",letterSpacing:1,marginBottom:8}}>⚠️ EXPIRING THIS WEEK ({expiringMembers.length})</div>
+          {expiringMembers.map(m=>{
+            const dl=daysLeft(m.expiryDate);
+            return(
+              <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6,flexWrap:"wrap",gap:8}}>
+                <div>
+                  <span style={{fontSize:13,fontWeight:700}}>{m.name}</span>
+                  <span style={{fontSize:11,color:dl===0?"#ff4d6d":"#ffd60a",fontFamily:"'Barlow',sans-serif",marginLeft:8}}>{dl===0?"Expires today":dl+" day"+(dl>1?"s":"")+" left"}</span>
+                </div>
+                {m.phone&&<button className="wa-btn" style={{padding:"4px 10px",fontSize:10}} onClick={()=>sendExpiry(m,dl)}>💬 Remind</button>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+        <button onClick={()=>{resetForm();setView("add");}} style={{flex:2,cursor:"pointer",background:"rgba(96,165,250,0.1)",border:"1.5px dashed rgba(96,165,250,0.35)",borderRadius:9,padding:"12px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:13,letterSpacing:1.5,color:"#60a5fa"}}>+ ADD MEMBER</button>
+        <button onClick={()=>setView("checkin")} style={{flex:1,cursor:"pointer",background:"rgba(0,255,135,0.08)",border:"1.5px solid rgba(0,255,135,0.25)",borderRadius:9,padding:"12px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:12,letterSpacing:1,color:"#00ff87"}}>✅ CHECK-IN</button>
+        <button onClick={()=>setView("announce")} style={{flex:1,cursor:"pointer",background:"rgba(37,211,102,0.08)",border:"1.5px solid rgba(37,211,102,0.25)",borderRadius:9,padding:"12px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:12,letterSpacing:1,color:"#25d366"}}>📢 ANNOUNCE</button>
+      </div>
+
+      {/* Search + filter */}
+      <div style={{display:"flex",gap:7,marginBottom:12,flexWrap:"wrap"}}>
+        <input placeholder="Search name or phone..." value={searchQ} onChange={e=>setSearchQ(e.target.value)} style={{flex:1,minWidth:140}}/>
+        <div style={{display:"flex",gap:4}}>
+          {[["all","All"],["active","Active"],["expiring","Expiring"],["expired","Expired"]].map(([v,l])=>(
+            <button key={v} className={"pt-filter-btn"+(filter===v?" active":"")} onClick={()=>setFilter(v)}>{l}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Members list */}
+      {filtered.length===0
+        ?<div className="empty"><div style={{fontSize:42,marginBottom:12}}>👥</div><div style={{fontSize:16,letterSpacing:2}}>NO MEMBERS FOUND</div></div>
+        :filtered.map((m,i)=>{
+          const dl=daysLeft(m.expiryDate);
+          const st=memberStatus(m);
+          const trainer=staff?.find(s=>s.id===m.trainerId);
+          return(
+            <div key={m.id} className={"member-card "+(st==="expiring"?"expiring":st==="expired"?"expired":"active-ok")} style={{animationDelay:i*0.04+"s"}} onClick={()=>{setSelMember(m);setView("detail");}}>
+              <div style={{display:"flex",alignItems:"center",gap:11}}>
+                <div className="member-avatar" style={{background:st==="active"?"rgba(0,255,135,0.08)":st==="expiring"?"rgba(255,214,10,0.08)":"rgba(255,77,109,0.08)",border:"1.5px solid "+(st==="active"?"rgba(0,255,135,0.2)":st==="expiring"?"rgba(255,214,10,0.2)":"rgba(255,77,109,0.2)"),color:st==="active"?"#00ff87":st==="expiring"?"#ffd60a":"#ff4d6d"}}>{m.name[0]?.toUpperCase()}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+                    <div style={{fontSize:15,fontWeight:700}}>{m.name}</div>
+                    <span className={"pkg-badge "+pkgClass(m.package)}>{m.package}</span>
+                    {!m.feePaid&&<span style={{fontSize:9,background:"rgba(255,77,109,0.1)",border:"1px solid rgba(255,77,109,0.25)",borderRadius:3,padding:"2px 6px",color:"#ff4d6d",letterSpacing:1}}>FEE DUE</span>}
+                  </div>
+                  <div style={{display:"flex",gap:8,marginTop:5,alignItems:"center",flexWrap:"wrap"}}>
+                    <span className={"days-pill "+(st==="active"?"days-ok":st==="expiring"?"days-warn":"days-expired")}>
+                      {dl!==null?(dl>=0?dl+" days left":"Expired"):"No expiry"}
+                    </span>
+                    {trainer&&<span className="trainer-chip">&#x1F3CB; {trainer.name}</span>}
+                    {m.phone&&<span style={{fontSize:10,color:"#374151",fontFamily:"'Barlow',sans-serif"}}>📱 {m.phone}</span>}
+                  </div>
+                </div>
+                <div style={{color:"#374151",fontSize:16,flexShrink:0}}>›</div>
+              </div>
+            </div>
+          );
+        })
+      }
+    </div>
+  );
+}
+
+/* ── REVENUE TAB ── */
+function RevenueTab({members, gymConfig, gymId, gymName, onSaveGymConfig}){
+  const [editUpi, setEditUpi] = useState(false);
+  const [upiForm, setUpiForm] = useState({upiId:gymConfig.upiId||"",upiName:gymConfig.upiName||gymName||""});
+  const [saving,  setSaving]  = useState(false);
+
+  useEffect(()=>{
+    setUpiForm({upiId:gymConfig.upiId||"",upiName:gymConfig.upiName||gymName||""});
+  },[gymConfig]);
+
+  const saveUpi=async()=>{
+    if(!upiForm.upiId.trim()){alert("Enter UPI ID!");return;}
+    setSaving(true);
+    await onSaveGymConfig({...gymConfig,...upiForm});
+    setSaving(false); setEditUpi(false);
+  };
+
+  // Revenue stats by package
+  const now=new Date();
+  const thisMonth=now.getMonth(); const thisYear=now.getFullYear();
+  const paidMembers=members.filter(m=>m.feePaid&&m.feeAmount>0);
+  const totalRevenue=members.filter(m=>m.feePaid).reduce((s,m)=>s+Number(m.feeAmount||0),0);
+  const pendingRevenue=members.filter(m=>!m.feePaid).reduce((s,m)=>s+Number(m.feeAmount||0),0);
+  const activeMembers=members.filter(m=>memberStatus(m)!=="expired");
+  const expiredMembers=members.filter(m=>memberStatus(m)==="expired");
+
+  // Package breakdown
+  const pkgBreakdown=PACKAGES.map(p=>{
+    const mems=members.filter(m=>m.package===p.name);
+    const rev=mems.filter(m=>m.feePaid).reduce((s,m)=>s+Number(m.feeAmount||0),0);
+    return{...p,count:mems.length,revenue:rev,pending:mems.filter(m=>!m.feePaid).length};
+  }).filter(p=>p.count>0);
+
+  const upiId=gymConfig.upiId||"";
+  const upiName=gymConfig.upiName||gymName||"Surya Gym 2.0";
+  const qrUrl=upiId?`https://api.qrserver.com/v1/create-qr-code/?size=220x220&color=ffffff&bgcolor=000000&data=upi://pay?pa=${encodeURIComponent(upiId)}%26pn=${encodeURIComponent(upiName)}%26cu=INR&format=png`:"";
+
+  return(
+    <div>
+      {/* Revenue overview */}
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+        {[["Total Collected","₹"+totalRevenue.toLocaleString("en-IN"),"#00ff87"],["Fee Pending","₹"+pendingRevenue.toLocaleString("en-IN"),"#ff4d6d"],["Active Members",activeMembers.length,"#60a5fa"],["Expired",expiredMembers.length,"#ff8c00"]].map(([l,v,col])=>(
+          <div key={l} className="rev-card">
+            <div style={{fontSize:20,fontWeight:900,color:col,lineHeight:1}}>{v}</div>
+            <div style={{fontSize:9,color:"#6b7280",letterSpacing:1,marginTop:3,fontFamily:"'Barlow',sans-serif",textTransform:"uppercase"}}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Package breakdown */}
+      <div style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"16px",marginBottom:16}}>
+        <div className="member-section-title" style={{marginTop:0}}>PACKAGE BREAKDOWN</div>
+        {pkgBreakdown.length===0?<div style={{color:"#4b5563",fontSize:12,fontFamily:"'Barlow',sans-serif"}}>No members yet.</div>:pkgBreakdown.map(p=>(
+          <div key={p.name} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span className={"pkg-badge "+p.cls}>{p.name}</span>
+              <span style={{fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{p.count} member{p.count>1?"s":""}</span>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:14,fontWeight:700,color:"#00ff87"}}>₹{p.revenue.toLocaleString("en-IN")}</div>
+              {p.pending>0&&<div style={{fontSize:10,color:"#ff4d6d",fontFamily:"'Barlow',sans-serif"}}>{p.pending} pending</div>}
+            </div>
+          </div>
+        ))}
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:10,paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.07)"}}>
+          <span style={{fontSize:12,fontWeight:700,letterSpacing:1}}>TOTAL</span>
+          <span style={{fontSize:16,fontWeight:900,color:"#00ff87"}}>₹{totalRevenue.toLocaleString("en-IN")}</span>
+        </div>
+      </div>
+
+      {/* Pending fee members */}
+      {members.filter(m=>!m.feePaid&&m.feeAmount>0).length>0&&(
+        <div style={{background:"rgba(255,77,109,0.04)",border:"1px solid rgba(255,77,109,0.2)",borderRadius:12,padding:"16px",marginBottom:16}}>
+          <div className="member-section-title" style={{marginTop:0,color:"#ff4d6d"}}>FEE PENDING ({members.filter(m=>!m.feePaid).length})</div>
+          {members.filter(m=>!m.feePaid&&m.feeAmount>0).map(m=>(
+            <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,flexWrap:"wrap",gap:6}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:700}}>{m.name}</div>
+                <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>₹{Number(m.feeAmount||0).toLocaleString("en-IN")} · {m.package}</div>
+              </div>
+              {m.phone&&<button className="wa-btn" style={{padding:"4px 10px",fontSize:10}} onClick={()=>{
+                const msg="Hi "+m.name+"!\n\nThis is a gentle reminder from Surya Gym 2.0.\n\nYour membership fee of ₹"+Number(m.feeAmount).toLocaleString("en-IN")+" for "+m.package+" package is pending.\n\nPlease clear your dues at the earliest to continue enjoying uninterrupted access.\n\nSurya Gym 2.0";
+                openWA(m.phone,msg);
+              }}>💬 Fee Reminder</button>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* UPI Payment QR */}
+      <div style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"18px"}}>
+        <div className="member-section-title" style={{marginTop:0}}>💳 UPI PAYMENT QR</div>
+        {!editUpi&&upiId?(
+          <div style={{display:"flex",gap:20,alignItems:"flex-start",flexWrap:"wrap"}}>
+            <div style={{textAlign:"center"}}>
+              <img src={qrUrl} alt="UPI QR" style={{width:180,height:180,borderRadius:10,background:"#000",border:"2px solid rgba(255,255,255,0.1)"}} onError={e=>e.target.style.display="none"}/>
+              <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginTop:8}}>Scan to pay</div>
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>{upiName}</div>
+              <div style={{fontSize:13,color:"#60a5fa",fontFamily:"'Barlow',sans-serif",marginBottom:12}}>{upiId}</div>
+              <div style={{fontSize:11,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginBottom:14}}>Members can scan this QR code to pay their membership fee via any UPI app.</div>
+              <button onClick={()=>setEditUpi(true)} style={{cursor:"pointer",background:"rgba(255,140,0,0.1)",border:"1px solid rgba(255,140,0,0.3)",borderRadius:6,padding:"7px 14px",color:"#ff8c00",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:11,letterSpacing:1}}>✏️ CHANGE UPI</button>
+            </div>
+          </div>
+        ):(
+          <div>
+            <div style={{fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginBottom:14}}>Members can scan this QR to pay fees directly via PhonePe, GPay, Paytm, etc.</div>
+            <div className="field-group">
+              <div className="field-label">UPI ID</div>
+              <input type="text" placeholder="yourname@paytm / yourname@okicici" value={upiForm.upiId} onChange={e=>setUpiForm(p=>({...p,upiId:e.target.value}))}/>
+              <div style={{fontSize:10,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginTop:4}}>e.g. surya.gym@paytm · surya123@okhdfc · 9876543210@upi</div>
+            </div>
+            <div className="field-group">
+              <div className="field-label">Display Name</div>
+              <input type="text" placeholder="Surya Gym 2.0" value={upiForm.upiName} onChange={e=>setUpiForm(p=>({...p,upiName:e.target.value}))}/>
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              <button className="save-btn" style={{flex:1,padding:"11px",background:"linear-gradient(135deg,#1d4ed8,#60a5fa)"}} onClick={saveUpi} disabled={saving}>{saving?<><span className="spinner"></span>SAVING...</>:"SAVE & GENERATE QR"}</button>
+              {upiId&&<button className="cancel-btn" onClick={()=>setEditUpi(false)}>CANCEL</button>}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── MEMBER PORTAL ── */
+function MemberPortal({member, members, gymConfig, gymId, gymName, onLogout, onSaveMemberAttend, loadMemberAttend}){
+  const m = members.find(x=>x.id===member.id)||member;
+  const [checkedIn, setCheckedIn] = useState(false);
+  const [checkInLoading, setCheckInLoading] = useState(true);
+  const [history, setHistory] = useState([]);
+  const [view, setView] = useState("home"); // home | history
+
+  const dl = daysLeft(m.expiryDate);
+  const st = memberStatus(m);
+
+  useEffect(()=>{
+    loadMemberAttend(today()).then(data=>{
+      if(data?.checked?.includes(m.id))setCheckedIn(true);
+      setCheckInLoading(false);
+    }).catch(()=>setCheckInLoading(false));
+  },[]);
+
+  const doCheckIn = async () => {
+    setCheckInLoading(true);
+    const existing = await loadMemberAttend(today()).catch(()=>null);
+    const checked = existing?.checked||[];
+    if(!checked.includes(m.id)){
+      await onSaveMemberAttend(today(),{checked:[...checked,m.id],updatedAt:new Date().toISOString()});
+      setCheckedIn(true);
+    }
+    setCheckInLoading(false);
+  };
+
+  const upiId=gymConfig?.upiId||"";
+  const upiName=gymConfig?.upiName||gymName||"Surya Gym 2.0";
+  const qrUrl=upiId?`https://api.qrserver.com/v1/create-qr-code/?size=200x200&color=ffffff&bgcolor=000000&data=upi://pay?pa=${encodeURIComponent(upiId)}%26pn=${encodeURIComponent(upiName)}%26am=${m.feeAmount||""}%26cu=INR&format=png`:"";
+
+  return(
+    <div className="wrap">
+      {/* Header */}
+      <div className="header">
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:44,height:44,borderRadius:11,background:"rgba(0,255,135,0.1)",border:"1.5px solid rgba(0,255,135,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,fontWeight:900,color:"#00ff87"}}>{m.name[0]?.toUpperCase()}</div>
+          <div>
+            <div style={{fontSize:16,fontWeight:900}}>{m.name}</div>
+            <div style={{fontSize:10,color:"#4b5563",letterSpacing:2,fontFamily:"'Barlow',sans-serif"}}>{gymName}</div>
+          </div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:5,alignItems:"flex-end"}}>
+          <span className="role-badge" style={{background:"rgba(0,255,135,0.08)",border:"1px solid rgba(0,255,135,0.25)",color:"#00ff87"}}>🏃 MEMBER</span>
+          <button onClick={onLogout} style={{cursor:"pointer",background:"rgba(255,77,109,0.08)",border:"1px solid rgba(255,77,109,0.25)",borderRadius:8,padding:"5px 12px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:11,letterSpacing:1,color:"#ff4d6d"}}>LOGOUT</button>
+        </div>
+      </div>
+
+      {/* Membership card */}
+      <div style={{background:st==="active"?"linear-gradient(135deg,rgba(0,80,0,0.3),rgba(0,40,20,0.4))":st==="expiring"?"linear-gradient(135deg,rgba(80,60,0,0.3),rgba(60,40,0,0.4))":"linear-gradient(135deg,rgba(80,0,20,0.3),rgba(50,0,10,0.4))",
+        border:"1px solid "+(st==="active"?"rgba(0,255,135,0.2)":st==="expiring"?"rgba(255,214,10,0.2)":"rgba(255,77,109,0.2)"),
+        borderRadius:16,padding:"20px",marginBottom:16}}>
+        <div style={{fontSize:10,color:"#4b5563",letterSpacing:3,fontFamily:"'Barlow',sans-serif",marginBottom:8}}>MEMBERSHIP CARD</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
+          <div>
+            <span className={"pkg-badge "+pkgClass(m.package)} style={{fontSize:12,padding:"4px 12px"}}>{m.package}</span>
+            <div style={{marginTop:10,fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>Valid till</div>
+            <div style={{fontSize:20,fontWeight:900,color:st==="active"?"#00ff87":st==="expiring"?"#ffd60a":"#ff4d6d"}}>{m.expiryDate?fmtDate(m.expiryDate):"—"}</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:42,fontWeight:900,lineHeight:1,color:st==="active"?"#00ff87":st==="expiring"?"#ffd60a":"#ff4d6d"}}>{dl!==null?(dl>=0?dl:"0"):"-"}</div>
+            <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{dl!==null?(dl>=0?"days left":"days expired"):""}</div>
+          </div>
+        </div>
+        {st==="expiring"&&<div style={{marginTop:10,fontSize:12,color:"#ffd60a",fontFamily:"'Barlow',sans-serif",background:"rgba(255,214,10,0.08)",borderRadius:6,padding:"7px 10px"}}>⚠️ Your membership is expiring soon! Please renew to continue.</div>}
+        {st==="expired"&&<div style={{marginTop:10,fontSize:12,color:"#ff4d6d",fontFamily:"'Barlow',sans-serif",background:"rgba(255,77,109,0.08)",borderRadius:6,padding:"7px 10px"}}>❌ Your membership has expired. Please renew.</div>}
+      </div>
+
+      {/* Check-in button */}
+      <div style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"16px",marginBottom:14,textAlign:"center"}}>
+        <div style={{fontSize:11,color:"#4b5563",letterSpacing:2,fontFamily:"'Barlow',sans-serif",marginBottom:10}}>TODAY — {fmtDate(today())}</div>
+        {checkInLoading
+          ?<div style={{color:"#4b5563",fontSize:13}}>Loading...</div>
+          :checkedIn
+          ?<div style={{fontSize:16,fontWeight:700,color:"#00ff87"}}>✅ Checked in today!</div>
+          :<button onClick={doCheckIn} style={{cursor:"pointer",background:"linear-gradient(135deg,rgba(0,255,135,0.15),rgba(0,200,100,0.1))",border:"1.5px solid rgba(0,255,135,0.4)",borderRadius:12,padding:"14px 32px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:16,letterSpacing:2,color:"#00ff87"}}>
+            🟢 CHECK IN NOW
+          </button>
+        }
+      </div>
+
+      {/* Info cards */}
+      <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+        {[["Package",m.package,"#60a5fa"],["Fee","₹"+Number(m.feeAmount||0).toLocaleString("en-IN")+(m.feePaid?" ✓":" ⏳"),m.feePaid?"#00ff87":"#ff4d6d"],["Goal",m.goal||"—","#a78bfa"]].map(([l,v,col])=>(
+          <div key={l} className="stat-card" style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:700,color:col}}>{v}</div>
+            <div style={{fontSize:9,color:"#6b7280",letterSpacing:1,marginTop:3,fontFamily:"'Barlow',sans-serif",textTransform:"uppercase"}}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Pay via UPI */}
+      {!m.feePaid&&upiId&&(
+        <div style={{background:"rgba(96,165,250,0.04)",border:"1px solid rgba(96,165,250,0.2)",borderRadius:12,padding:"16px",marginBottom:14,textAlign:"center"}}>
+          <div style={{fontSize:13,fontWeight:700,marginBottom:4}}>💳 Pay Your Fee</div>
+          <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginBottom:12}}>₹{Number(m.feeAmount||0).toLocaleString("en-IN")} · Scan with PhonePe / GPay / Paytm</div>
+          <img src={qrUrl} alt="Pay QR" style={{width:160,height:160,borderRadius:8,border:"2px solid rgba(255,255,255,0.1)"}}/>
+          <div style={{marginTop:8,fontSize:11,color:"#60a5fa",fontFamily:"'Barlow',sans-serif"}}>{upiId}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 /* ── PERSONAL TRAINING TAB ── */
 function PTTab({staff, ptClients, ptSessions, gymId, showToast, onSaveClient, onDeleteClient, onSaveSession}){
   const [view,       setView]       = useState("clients"); // clients | add | detail
@@ -1849,10 +2563,11 @@ function GymManager({gymList, activeGymId, onSwitch, onSave, onClose}){
 }
 
 /* ── LOGIN GATE ── */
-function LoginGate({staff, onLogin}){
-  const [step, setStep]   = useState("choose"); // choose | owner-pin | staff-select | staff-pin
+function LoginGate({staff, members, onLogin}){
+  const [step, setStep]   = useState("choose");
   const [pin,  setPin]    = useState("");
   const [selEmp, setSelEmp] = useState(null);
+  const [selMember, setSelMember] = useState(null);
   const [shake, setShake]   = useState(false);
 
   const doShake = () => { setShake(true); setTimeout(()=>setShake(false),500); setPin(""); };
@@ -1868,6 +2583,9 @@ function LoginGate({staff, onLogin}){
           else { doShake(); }
         } else if(step === "staff-pin"){
           if(selEmp && next === (selEmp.pin||"0000")){ onLogin({role:"staff", emp:selEmp}); }
+          else { doShake(); }
+        } else if(step === "member-pin"){
+          if(selMember && next === (selMember.pin||(selMember.phone||"0000").slice(-4))){ onLogin({role:"member", member:selMember}); }
           else { doShake(); }
         }
       }, 200);
@@ -1900,6 +2618,57 @@ function LoginGate({staff, onLogin}){
               <span style={{fontSize:22}}>👤</span>
               <div><div style={{fontSize:16}}>STAFF MEMBER</div><div style={{fontSize:11,color:"rgba(167,139,250,0.7)",fontWeight:400,fontFamily:"'Barlow',sans-serif",marginTop:2}}>View your attendance & apply leave</div></div>
             </button>
+            <button className="login-role-btn" style={{border:"1.5px solid rgba(0,255,135,0.25)",background:"rgba(0,255,135,0.04)"}} onClick={()=>{setStep("member-phone");setPin("");}}>
+              <span style={{fontSize:22}}>🏃</span>
+              <div><div style={{fontSize:16,color:"#00ff87"}}>GYM MEMBER</div><div style={{fontSize:11,color:"rgba(0,255,135,0.6)",fontWeight:400,fontFamily:"'Barlow',sans-serif",marginTop:2}}>Check package, attendance & more</div></div>
+            </button>
+          </div>
+        )}
+        {/* Member phone entry */}
+        {step==="member-phone"&&(
+          <div>
+            <div style={{fontSize:13,color:"#00ff87",letterSpacing:2,textAlign:"center",marginBottom:16}}>MEMBER LOGIN</div>
+            <div className="field-group">
+              <div className="field-label">Your Phone Number</div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <span style={{color:"#25d366",fontWeight:700}}>+91</span>
+                <input id="mem-phone" type="tel" maxLength={10} placeholder="9876543210" style={{flex:1,fontSize:18,letterSpacing:2}}
+                  onChange={e=>{ const v=e.target.value.replace(/\D/g,"").slice(0,10); e.target.value=v; }}
+                />
+              </div>
+            </div>
+            <button className="save-btn" style={{width:"100%",marginTop:8,background:"linear-gradient(135deg,#059669,#00ff87)",color:"#000"}} onClick={()=>{
+              const ph=document.getElementById("mem-phone")?.value||"";
+              if(ph.length!==10){alert("Enter 10-digit phone number");return;}
+              const mem=(members||[]).find(m=>m.phone===ph);
+              if(!mem){alert("No member found with this number.
+Contact the gym owner.");return;}
+              setSelMember(mem); setStep("member-pin"); setPin("");
+            }}>FIND MY ACCOUNT →</button>
+            <button style={{background:"none",border:"none",color:"#4b5563",cursor:"pointer",width:"100%",marginTop:10,fontFamily:"'Barlow Condensed',sans-serif",fontSize:12,letterSpacing:1}} onClick={()=>setStep("choose")}>← BACK</button>
+          </div>
+        )}
+        {/* Member PIN */}
+        {step==="member-pin"&&selMember&&(
+          <div>
+            <div style={{textAlign:"center",marginBottom:8}}>
+              <div style={{width:48,height:48,borderRadius:12,background:"rgba(0,255,135,0.1)",border:"1.5px solid rgba(0,255,135,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:900,color:"#00ff87",margin:"0 auto 8px"}}>{selMember.name[0]?.toUpperCase()}</div>
+              <div style={{fontSize:15,fontWeight:700}}>{selMember.name}</div>
+              <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{selMember.package}</div>
+              <div style={{fontSize:11,color:"#00ff87",letterSpacing:2,marginTop:8}}>ENTER YOUR PIN</div>
+            </div>
+            <div className="pin-display">
+              {[0,1,2,3].map(i=><div key={i} className={"pin-dot"+(pin.length>i?" filled":"")} style={{borderColor:shake?"#ff4d6d":undefined,background:shake&&pin.length>i?"#ff4d6d":undefined}}/>)}
+            </div>
+            <div className="pinpad">
+              {[1,2,3,4,5,6,7,8,9].map(n=>(
+                <button key={n} className="pin-btn" onClick={()=>pressNum(String(n))}>{n}</button>
+              ))}
+              <button className="pin-btn" style={{color:"#6b7280"}} onClick={()=>{setStep("member-phone");setPin("");}}>←</button>
+              <button className="pin-btn zero" onClick={()=>pressNum("0")}>0</button>
+              <button className="pin-btn" style={{color:"#ff4d6d"}} onClick={del}>⌫</button>
+            </div>
+            {shake&&<div style={{textAlign:"center",color:"#ff4d6d",fontSize:12,fontFamily:"'Barlow',sans-serif",marginTop:12}}>Wrong PIN. Try again.</div>}
           </div>
         )}
 
@@ -1979,7 +2748,7 @@ function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove,
   useEffect(()=>{
     if(!allDates.length){setLoadingData(false);return;}
     setLoadingData(true);
-    Promise.all(allDates.map(d=>window._loadAttendance(d).then(data=>[d,data]))).then(results=>{
+    Promise.all(allDates.map(d=>window._loadAttendance(d,gymId||'gym_default').then(data=>[d,data]))).then(results=>{
       const map={};results.forEach(([d,data])=>{if(data)map[d]=data;});
       setAllData(map);setLoadingData(false);
     });
@@ -1987,7 +2756,7 @@ function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove,
 
   // Listen to today for punch in/out
   useEffect(()=>{
-    const unsub = window._listenAttendance(today(), data=>{
+    const unsub = window._listenAttendance(today(), gymId||'gym_default', data=>{
       setDayData(data||{statuses:{},shifts:{},notes:{},punchIn:{},punchOut:{}});
       setTodayLoaded(true);
     });
