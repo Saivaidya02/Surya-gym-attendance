@@ -115,6 +115,21 @@
     .punch-active{font-size:10px;background:rgba(0,255,135,0.08);border:1px solid rgba(0,255,135,0.2);border-radius:4px;padding:3px 8px;color:#00ff87;font-family:'Barlow',sans-serif}
     .duration{font-size:11px;color:#ffd60a;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px}
     .cancel-btn{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:2px;color:#6b7280;cursor:pointer;flex:1}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:12px}
+    .cal-day{border-radius:8px;padding:6px 4px;text-align:center;cursor:pointer;transition:all 0.15s;border:1px solid transparent;min-height:52px;display:flex;flex-direction:column;align-items:center;gap:2px}
+    .cal-day:hover{border-color:rgba(255,77,0,0.3);background:rgba(255,77,0,0.05)}
+    .cal-day.today{border-color:#ff4d00;background:rgba(255,77,0,0.08)}
+    .cal-day.selected{border-color:#ff8c00;background:rgba(255,140,0,0.15)}
+    .cal-day.empty{cursor:default;opacity:0}
+    .cal-day-num{font-size:13px;font-weight:700;font-family:'Barlow Condensed',sans-serif}
+    .cal-dots{display:flex;gap:2px;justify-content:center;flex-wrap:wrap;margin-top:2px}
+    .cal-dot{width:5px;height:5px;border-radius:50%}
+    .cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    .cal-nav{background:none;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e8edf2;cursor:pointer;padding:6px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;transition:all 0.15s}
+    .cal-nav:hover{border-color:#ff4d00;color:#ff4d00}
+    .cal-weekday{text-align:center;font-size:10px;color:#4b5563;letter-spacing:1px;font-family:'Barlow',sans-serif;padding:4px 0;text-transform:uppercase}
+    .cal-legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;padding:10px 14px;background:rgba(255,255,255,0.02);border-radius:8px;border:1px solid rgba(255,255,255,0.05)}
+    .cal-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:#6b7280;font-family:'Barlow',sans-serif}
   </style>
 </head>
 <body>
@@ -432,7 +447,7 @@ function App(){
 
     {/* Tabs */}
     <div className="tabs-bar">
-      {[["mark","Mark Attendance"],["history","History"],["summary","Summary"]].map(([id,lbl])=>(
+      {[["mark","Mark Attendance"],["calendar","📅 Calendar"],["history","History"],["summary","Summary"]].map(([id,lbl])=>(
         <button key={id} className={`tab-btn${tab===id?" active":""}`} onClick={()=>setTab(id)}>{lbl}</button>
       ))}
     </div>
@@ -558,6 +573,8 @@ function App(){
     </div>}
 
     {/* SUMMARY TAB */}
+    {tab==="calendar"&&<CalendarTab allDates={allDates} staff={staff} onSelectDate={(d)=>{setDate(d);setTab("mark");}}/>}
+
     {tab==="summary"&&<SummaryTab allDates={allDates} staff={staff}/>}
 
     {toast&&<div className="toast">{toast}</div>}
@@ -622,6 +639,139 @@ function SummaryTab({allDates,staff}){
       );
     })}
   </div>;
+}
+
+/* ── CALENDAR TAB ── */
+function CalendarTab({allDates,staff,onSelectDate}){
+  const [calData,setCalData]=useState({});
+  const [loadingCal,setLoadingCal]=useState(false);
+  const now=new Date();
+  const [viewYear,setViewYear]=useState(now.getFullYear());
+  const [viewMonth,setViewMonth]=useState(now.getMonth());
+  const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const DAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+  useEffect(()=>{
+    const ms=String(viewYear)+"-"+String(viewMonth+1).padStart(2,"0");
+    const mDates=allDates.filter(d=>d.startsWith(ms));
+    if(!mDates.length){setCalData({});return;}
+    setLoadingCal(true);
+    Promise.all(mDates.map(d=>window._loadAttendance(d).then(data=>[d,data]))).then(results=>{
+      const map={};results.forEach(([d,data])=>{if(data)map[d]=data;});
+      setCalData(map);setLoadingCal(false);
+    });
+  },[viewYear,viewMonth,allDates]);
+
+  const prevMonth=()=>{if(viewMonth===0){setViewMonth(11);setViewYear(y=>y-1);}else setViewMonth(m=>m-1);};
+  const nextMonth=()=>{if(viewMonth===11){setViewMonth(0);setViewYear(y=>y+1);}else setViewMonth(m=>m+1);};
+  const todayStr=new Date().toISOString().split("T")[0];
+  const firstDay=new Date(viewYear,viewMonth,1).getDay();
+  const daysInMonth=new Date(viewYear,viewMonth+1,0).getDate();
+  const cells=[];
+  for(let i=0;i<firstDay;i++)cells.push(null);
+  for(let d=1;d<=daysInMonth;d++)cells.push(d);
+  const getDateStr=d=>viewYear+"-"+String(viewMonth+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");
+
+  const getDots=dateStr=>{
+    const data=calData[dateStr];
+    if(!data||!data.statuses)return[];
+    return staff.map(emp=>{
+      const s=data.statuses[emp.id];
+      if(s==="Present")return"#00ff87";
+      if(s==="Absent")return"#ff4d6d";
+      if(s==="Half Day")return"#ffd60a";
+      if(s==="Leave")return"#a78bfa";
+      return null;
+    }).filter(Boolean);
+  };
+
+  const getSummary=dateStr=>{
+    const data=calData[dateStr];
+    if(!data||!data.statuses)return null;
+    const vals=Object.values(data.statuses);
+    const p=vals.filter(s=>s==="Present").length;
+    const total=staff.length;
+    return{p,total,pct:total?Math.round(p/total*100):0};
+  };
+
+  return(
+    <div>
+      {/* Month Nav */}
+      <div className="cal-header">
+        <button className="cal-nav" onClick={prevMonth}>← PREV</button>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:22,fontWeight:900,letterSpacing:2}}>{MONTHS[viewMonth].toUpperCase()}</div>
+          <div style={{fontSize:13,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{viewYear}</div>
+        </div>
+        <button className="cal-nav" onClick={nextMonth}>NEXT →</button>
+      </div>
+
+      {/* Weekday headers */}
+      <div className="cal-grid">
+        {DAYS.map(d=><div key={d} className="cal-weekday">{d}</div>)}
+      </div>
+
+      {/* Days */}
+      {loadingCal
+        ?<div style={{textAlign:"center",padding:"30px 0"}}><span className="spinner"></span><span style={{color:"#6b7280",fontFamily:"'Barlow',sans-serif",fontSize:13}}>Loading...</span></div>
+        :<div className="cal-grid">
+          {cells.map((d,i)=>{
+            if(!d)return<div key={"e"+i} className="cal-day empty"></div>;
+            const dateStr=getDateStr(d);
+            const isToday=dateStr===todayStr;
+            const hasSaved=allDates.includes(dateStr);
+            const dots=getDots(dateStr);
+            const summary=getSummary(dateStr);
+            const isFuture=dateStr>todayStr;
+            let bg="rgba(255,255,255,0.02)";
+            if(hasSaved&&summary){
+              if(summary.pct>=80)bg="rgba(0,255,135,0.06)";
+              else if(summary.pct>=50)bg="rgba(255,214,10,0.06)";
+              else bg="rgba(255,77,109,0.06)";
+            }
+            return(
+              <div key={d} className={"cal-day"+(isToday?" today":"")}
+                onClick={()=>!isFuture&&onSelectDate(dateStr)}
+                style={{opacity:isFuture?0.3:1,cursor:isFuture?"not-allowed":"pointer",background:bg}}>
+                <div className="cal-day-num" style={{color:isToday?"#ff4d00":hasSaved?"#e8edf2":"#4b5563"}}>{d}</div>
+                {summary&&<div style={{fontSize:9,color:summary.pct>=80?"#00ff87":summary.pct>=50?"#ffd60a":"#ff4d6d",fontFamily:"'Barlow',sans-serif",fontWeight:700}}>{summary.pct}%</div>}
+                {dots.length>0&&<div className="cal-dots">{dots.slice(0,4).map((c,ci)=><div key={ci} className="cal-dot" style={{background:c}}/>)}</div>}
+              </div>
+            );
+          })}
+        </div>
+      }
+
+      {/* Legend */}
+      <div className="cal-legend">
+        {[["#00ff87","Present"],["#ff4d6d","Absent"],["#ffd60a","Half Day"],["#a78bfa","Leave"]].map(([c,l])=>(
+          <div key={l} className="cal-legend-item"><div className="cal-dot" style={{background:c,width:8,height:8}}></div>{l}</div>
+        ))}
+        <div style={{marginLeft:"auto",fontSize:10,color:"#4b5563",fontFamily:"'Barlow',sans-serif"}}>Tap day to open</div>
+      </div>
+
+      {/* Monthly stats */}
+      {Object.keys(calData).length>0&&(()=>{
+        let totalPresent=0,totalDays=0;
+        Object.values(calData).forEach(data=>{
+          if(data&&data.statuses){totalDays++;totalPresent+=Object.values(data.statuses).filter(s=>s==="Present").length;}
+        });
+        const avg=totalDays>0?Math.round(totalPresent/(totalDays*staff.length)*100):0;
+        return(
+          <div style={{marginTop:16,background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:10,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <div style={{fontSize:11,color:"#4b5563",letterSpacing:2,fontFamily:"'Barlow',sans-serif"}}>MONTHLY OVERVIEW</div>
+              <div style={{fontSize:13,color:"#9ca3af",fontFamily:"'Barlow',sans-serif",marginTop:4}}>{totalDays} days recorded · {MONTHS[viewMonth]}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:32,fontWeight:900,color:avg>=80?"#00ff87":avg>=60?"#ffd60a":"#ff4d6d"}}>{avg}%</div>
+              <div style={{fontSize:9,color:"#4b5563",letterSpacing:1}}>AVG ATTENDANCE</div>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
