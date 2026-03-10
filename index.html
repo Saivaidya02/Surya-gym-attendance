@@ -97,8 +97,9 @@
     input[type=date],input[type=text],input[type=password]{background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,77,0,0.3);border-radius:6px;color:#e8edf2;font-family:'Barlow Condensed',sans-serif;font-size:14px;padding:7px 10px;outline:none;width:100%}
     input[type=date]{width:auto}
     input[type=text]:focus,input[type=password]:focus,input[type=date]:focus{border-color:#ff4d00}
-    select{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#9ca3af;font-family:'Barlow',sans-serif;font-size:12px;padding:7px 8px;outline:none;cursor:pointer;width:100%;border-radius:5px}
+    select{background:#1a1f2e;border:1px solid rgba(255,255,255,0.1);color:#e8edf2;font-family:'Barlow',sans-serif;font-size:12px;padding:7px 8px;outline:none;cursor:pointer;width:100%;border-radius:5px}
     select:focus{border-color:#ff4d00}
+    select option{background:#1a1f2e;color:#e8edf2}
     textarea{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:5px;color:#9ca3af;font-family:'Barlow',sans-serif;font-size:12px;padding:6px 8px;outline:none;resize:none;width:100%}
     textarea:focus{border-color:#ff4d00}
     .divider{height:2px;background:linear-gradient(90deg,#ff4d00,#ff8c0060,transparent);margin-bottom:6px}
@@ -180,7 +181,7 @@
     .export-excel:hover{background:rgba(0,196,84,0.2);border-color:#00c454}
     .export-pdf{background:rgba(255,77,0,0.1);border-color:rgba(255,77,0,0.4);color:#ff6b35}
     .export-pdf:hover{background:rgba(255,77,0,0.2);border-color:#ff4d00}
-    .export-month-select{background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.1);border-radius:8px;color:#e8edf2;font-family:'Barlow Condensed',sans-serif;font-size:15px;padding:10px 14px;outline:none;width:100%;cursor:pointer}
+    .export-month-select{background:#1a1f2e;border:1.5px solid rgba(255,255,255,0.1);border-radius:8px;color:#e8edf2;font-family:'Barlow Condensed',sans-serif;font-size:15px;padding:10px 14px;outline:none;width:100%;cursor:pointer}
     .export-month-select:focus{border-color:#ff4d00}
     .preview-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px}
     .preview-table th{background:rgba(255,77,0,0.15);color:#ff8c00;padding:7px 10px;text-align:left;letter-spacing:1px;font-size:10px;border:1px solid rgba(255,255,255,0.06)}
@@ -1656,10 +1657,10 @@ function MembersTab({members, gymId, gymConfig, staff, memberAttend, date, showT
           <div style={{fontSize:11,color:"#4b5563",letterSpacing:1,fontFamily:"'Barlow',sans-serif",marginBottom:8}}>QUICK TEMPLATES:</div>
           <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>
             {[
-              ["Holiday Notice","Gym will be closed on {date}. We apologize for the inconvenience."],
-              ["New Batch","We are starting a new batch from {date}. Timings: {time}. Limited slots!"],
+              ["Holiday Notice","Gym will be closed on [date]. We apologize for the inconvenience."],
+              ["New Batch","We are starting a new batch from [date]. Timings: [time]. Limited slots!"],
               ["Fee Reminder","Your monthly fee is due. Please clear your dues at the earliest."],
-              ["Festive Wishes","Wishing you and your family a very Happy {festival}! 🎉"],
+              ["Festive Wishes","Wishing you and your family a very Happy [festival]!"],
             ].map(([title,tmpl])=>(
               <button key={title} onClick={()=>setAnnounce(tmpl)} style={{cursor:"pointer",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:7,padding:"8px 14px",textAlign:"left",fontFamily:"'Barlow',sans-serif",fontSize:12,color:"#6b7280",transition:"all 0.15s"}}>
                 <span style={{color:"#e8edf2",fontWeight:700}}>{title}:</span> {tmpl.slice(0,60)}...
@@ -2618,32 +2619,25 @@ function LoginGate({staff, members, onLogin}){
               <span style={{fontSize:22}}>👤</span>
               <div><div style={{fontSize:16}}>STAFF MEMBER</div><div style={{fontSize:11,color:"rgba(167,139,250,0.7)",fontWeight:400,fontFamily:"'Barlow',sans-serif",marginTop:2}}>View your attendance & apply leave</div></div>
             </button>
-            <button className="login-role-btn" style={{border:"1.5px solid rgba(0,255,135,0.25)",background:"rgba(0,255,135,0.04)"}} onClick={()=>{setStep("member-phone");setPin("");}}>
+            <button className="login-role-btn" style={{border:"1.5px solid rgba(0,255,135,0.25)",background:"rgba(0,255,135,0.04)"}} onClick={()=>{setStep("member-select");setPin("");}}>
               <span style={{fontSize:22}}>🏃</span>
               <div><div style={{fontSize:16,color:"#00ff87"}}>GYM MEMBER</div><div style={{fontSize:11,color:"rgba(0,255,135,0.6)",fontWeight:400,fontFamily:"'Barlow',sans-serif",marginTop:2}}>Check package, attendance & more</div></div>
             </button>
           </div>
         )}
-        {/* Member phone entry */}
-        {step==="member-phone"&&(
+        {/* Member name select */}
+        {step==="member-select"&&(
           <div>
-            <div style={{fontSize:13,color:"#00ff87",letterSpacing:2,textAlign:"center",marginBottom:16}}>MEMBER LOGIN</div>
-            <div className="field-group">
-              <div className="field-label">Your Phone Number</div>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <span style={{color:"#25d366",fontWeight:700}}>+91</span>
-                <input id="mem-phone" type="tel" maxLength={10} placeholder="9876543210" style={{flex:1,fontSize:18,letterSpacing:2}}
-                  onChange={e=>{ const v=e.target.value.replace(/\D/g,"").slice(0,10); e.target.value=v; }}
-                />
-              </div>
+            <div style={{fontSize:13,color:"#00ff87",letterSpacing:2,textAlign:"center",marginBottom:16}}>SELECT YOUR NAME</div>
+            <div style={{maxHeight:260,overflowY:"auto",display:"flex",flexDirection:"column",gap:6}}>
+              {(members||[]).length===0&&<div style={{textAlign:"center",color:"#4b5563",fontSize:13,padding:20}}>No members found</div>}
+              {(members||[]).map(mem=>(
+                <button key={mem.id} className="login-role-btn" style={{border:"1.5px solid rgba(0,255,135,0.2)",background:"rgba(0,255,135,0.04)",marginBottom:0,padding:"10px 14px"}} onClick={()=>{setSelMember(mem);setStep("member-pin");setPin("");}}>
+                  <div style={{width:36,height:36,borderRadius:8,background:"rgba(0,255,135,0.1)",border:"1.5px solid rgba(0,255,135,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:"#00ff87",flexShrink:0}}>{(mem.name||"?")[0].toUpperCase()}</div>
+                  <div><div style={{fontSize:14,color:"#e8edf2"}}>{mem.name}</div><div style={{fontSize:11,color:"rgba(0,255,135,0.5)",fontWeight:400,fontFamily:"'Barlow',sans-serif"}}>{mem.package||"Member"}</div></div>
+                </button>
+              ))}
             </div>
-            <button className="save-btn" style={{width:"100%",marginTop:8,background:"linear-gradient(135deg,#059669,#00ff87)",color:"#000"}} onClick={()=>{
-              const ph=document.getElementById("mem-phone")?.value||"";
-              if(ph.length!==10){alert("Enter 10-digit phone number");return;}
-              const mem=(members||[]).find(m=>m.phone===ph);
-              if(!mem){alert("No member found with this number. Contact the gym owner.");return;}
-              setSelMember(mem); setStep("member-pin"); setPin("");
-            }}>FIND MY ACCOUNT →</button>
             <button style={{background:"none",border:"none",color:"#4b5563",cursor:"pointer",width:"100%",marginTop:10,fontFamily:"'Barlow Condensed',sans-serif",fontSize:12,letterSpacing:1}} onClick={()=>setStep("choose")}>← BACK</button>
           </div>
         )}
@@ -2663,7 +2657,7 @@ function LoginGate({staff, members, onLogin}){
               {[1,2,3,4,5,6,7,8,9].map(n=>(
                 <button key={n} className="pin-btn" onClick={()=>pressNum(String(n))}>{n}</button>
               ))}
-              <button className="pin-btn" style={{color:"#6b7280"}} onClick={()=>{setStep("member-phone");setPin("");}}>←</button>
+              <button className="pin-btn" style={{color:"#6b7280"}} onClick={()=>{setStep("member-select");setPin("");}}>←</button>
               <button className="pin-btn zero" onClick={()=>pressNum("0")}>0</button>
               <button className="pin-btn" style={{color:"#ff4d6d"}} onClick={del}>⌫</button>
             </div>
