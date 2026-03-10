@@ -310,7 +310,35 @@ function App(){
     {/* Header */}
     <div style={{marginBottom:28}}>
       <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:8}}>
-        <div style={{width:48,height:48,background:"linear-gradient(135deg,#ff4d00,#ff8c00)",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,animation:"flame 2s ease-in-out infinite",boxShadow:"0 4px 20px rgba(255,77,0,0.5)"}}>🔥</div>
+        <div style={{width:54,height:54,flexShrink:0,animation:"flame 3s ease-in-out infinite"}}>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="54" height="54">
+            <defs>
+              <radialGradient id="sunGrad" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#fff7a0"/>
+                <stop offset="40%" stopColor="#ffb700"/>
+                <stop offset="100%" stopColor="#ff4d00"/>
+              </radialGradient>
+              <radialGradient id="coreGrad" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#ffffff"/>
+                <stop offset="100%" stopColor="#ffd60a"/>
+              </radialGradient>
+              <filter id="glowF"><feGaussianBlur stdDeviation="2.5" result="cb"/><feMerge><feMergeNode in="cb"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            </defs>
+            <g filter="url(#glowF)" opacity="0.9">
+              <line x1="50" y1="5" x2="50" y2="18" stroke="#ff8c00" strokeWidth="3.5" strokeLinecap="round"/>
+              <line x1="50" y1="82" x2="50" y2="95" stroke="#ff8c00" strokeWidth="3.5" strokeLinecap="round"/>
+              <line x1="5" y1="50" x2="18" y2="50" stroke="#ff8c00" strokeWidth="3.5" strokeLinecap="round"/>
+              <line x1="82" y1="50" x2="95" y2="50" stroke="#ff8c00" strokeWidth="3.5" strokeLinecap="round"/>
+              <line x1="16" y1="16" x2="25" y2="25" stroke="#ff8c00" strokeWidth="3.5" strokeLinecap="round"/>
+              <line x1="75" y1="75" x2="84" y2="84" stroke="#ff8c00" strokeWidth="3.5" strokeLinecap="round"/>
+              <line x1="84" y1="16" x2="75" y2="25" stroke="#ff8c00" strokeWidth="3.5" strokeLinecap="round"/>
+              <line x1="16" y1="84" x2="25" y2="75" stroke="#ff8c00" strokeWidth="3.5" strokeLinecap="round"/>
+            </g>
+            <circle cx="50" cy="50" r="22" fill="url(#sunGrad)" filter="url(#glowF)"/>
+            <circle cx="50" cy="50" r="14" fill="url(#coreGrad)"/>
+            <text x="50" y="56" textAnchor="middle" fontFamily="Arial Black, sans-serif" fontWeight="900" fontSize="16" fill="#cc3300">S</text>
+          </svg>
+        </div>
         <div>
           <div style={{fontSize:11,letterSpacing:4,color:"#ff4d00",fontWeight:700,textTransform:"uppercase"}}>Surya Gym 2.0</div>
           <div style={{fontSize:30,fontWeight:900,letterSpacing:1,lineHeight:1.1,textTransform:"uppercase"}}>Staff Attendance</div>
