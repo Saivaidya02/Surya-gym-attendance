@@ -2641,8 +2641,7 @@ function LoginGate({staff, members, onLogin}){
               const ph=document.getElementById("mem-phone")?.value||"";
               if(ph.length!==10){alert("Enter 10-digit phone number");return;}
               const mem=(members||[]).find(m=>m.phone===ph);
-              if(!mem){alert("No member found with this number.
-Contact the gym owner.");return;}
+              if(!mem){alert("No member found with this number. Contact the gym owner.");return;}
               setSelMember(mem); setStep("member-pin"); setPin("");
             }}>FIND MY ACCOUNT →</button>
             <button style={{background:"none",border:"none",color:"#4b5563",cursor:"pointer",width:"100%",marginTop:10,fontFamily:"'Barlow Condensed',sans-serif",fontSize:12,letterSpacing:1}} onClick={()=>setStep("choose")}>← BACK</button>
