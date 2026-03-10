@@ -1,0 +1,13 @@
+{
+  "short_name": "Surya Gym",
+  "name": "Surya Gym 2.0 Attendance",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#ff4d00",
+  "background_color": "#080c10"
+}
