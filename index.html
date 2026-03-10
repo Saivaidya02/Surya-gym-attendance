@@ -12,343 +12,343 @@
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc, collection, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    const firebaseConfig = {
+      apiKey: "AIzaSyCqvx_WIP4Rgs4YvaAzLRc5WDZOMCmPWNI",
+      authDomain: "surya-gym-attendance-267b8.firebaseapp.com",
+      projectId: "surya-gym-attendance-267b8",
+      storageBucket: "surya-gym-attendance-267b8.firebasestorage.app",
+      messagingSenderId: "966870024989",
+      appId: "1:966870024989:web:0ba8546b99aea0a756d7f4"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    window._db = db;
+    window._saveAttendance = async (dateKey, data) => { await setDoc(doc(db, "attendance", dateKey), data); };
+    window._loadAttendance = async (dateKey) => { const snap = await getDoc(doc(db, "attendance", dateKey)); return snap.exists() ? snap.data() : null; };
+    window._listenAttendance = (dateKey, cb) => onSnapshot(doc(db, "attendance", dateKey), snap => cb(snap.exists() ? snap.data() : null));
+    window._loadAllDates = async () => { const snap = await getDocs(collection(db, "attendance")); return snap.docs.map(d => d.id); };
+    window._fbReady = true;
+    window.dispatchEvent(new Event("firebaseReady"));
+  </script>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #080c10; color: #e8edf2; font-family: 'Barlow Condensed', sans-serif; }
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-thumb { background: #ff4d00; border-radius: 2px; }
-
-    @keyframes slide-in { from { opacity:0; transform:translateX(-20px); } to { opacity:1; transform:translateX(0); } }
-    @keyframes flame { 0%,100% { transform:scaleY(1) rotate(-1deg); } 50% { transform:scaleY(1.05) rotate(1deg); } }
-    @keyframes save-flash { 0% { background:#ff4d00; } 50% { background:#00ff87; } 100% { background:#ff4d00; } }
-    @keyframes toast-in { from { opacity:0; transform:translateY(20px) translateX(-50%); } to { opacity:1; transform:translateY(0) translateX(-50%); } }
-
-    .grid-bg {
-      position: fixed; inset: 0; z-index: 0; pointer-events: none;
-      background-image: linear-gradient(rgba(255,77,0,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,77,0,0.04) 1px, transparent 1px);
-      background-size: 40px 40px;
-    }
-    .glow { position:fixed; top:-100px; right:-100px; width:500px; height:500px; background:radial-gradient(circle, rgba(255,77,0,0.12) 0%, transparent 70%); pointer-events:none; z-index:0; }
-    .wrap { position:relative; z-index:1; max-width:860px; margin:0 auto; padding:24px 16px; }
-
-    .status-btn {
-      cursor:pointer; border:1.5px solid transparent; border-radius:4px; padding:5px 10px;
-      font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:11px; letter-spacing:1px;
-      transition:all 0.15s; background:rgba(255,255,255,0.04); color:#6b7280;
-    }
-    .status-btn:hover { opacity:0.85; transform:translateY(-1px); }
-    .btn-Present.active  { background:rgba(0,255,135,0.15); border-color:#00ff87; color:#00ff87; }
-    .btn-Absent.active   { background:rgba(255,77,109,0.15); border-color:#ff4d6d; color:#ff4d6d; }
-    .btn-HalfDay.active  { background:rgba(255,214,10,0.15); border-color:#ffd60a; color:#ffd60a; }
-    .btn-Leave.active    { background:rgba(167,139,250,0.15); border-color:#a78bfa; color:#a78bfa; }
-
-    .tab-btn {
-      cursor:pointer; background:none; border:none; font-family:'Barlow Condensed',sans-serif;
-      font-weight:700; font-size:15px; letter-spacing:2px; padding:10px 24px;
-      color:#4b5563; border-bottom:2px solid transparent; transition:all 0.2s; text-transform:uppercase;
-    }
-    .tab-btn.active { color:#ff4d00; border-bottom-color:#ff4d00; }
-    .tab-btn:hover { color:#e8edf2; }
-
-    .emp-row {
-      animation:slide-in 0.3s ease both;
-      background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.06);
-      border-radius:10px; padding:14px 16px; margin-bottom:8px; transition:border-color 0.2s;
-    }
-    .emp-row:hover { border-color:rgba(255,77,0,0.25); }
-
-    .save-btn {
-      cursor:pointer; background:linear-gradient(135deg,#ff4d00,#ff8c00); border:none;
-      border-radius:8px; padding:14px 36px; font-family:'Barlow Condensed',sans-serif;
-      font-weight:800; font-size:16px; letter-spacing:3px; color:white; text-transform:uppercase;
-      transition:all 0.2s; box-shadow:0 4px 20px rgba(255,77,0,0.35);
-    }
-    .save-btn:hover { transform:translateY(-2px); box-shadow:0 8px 28px rgba(255,77,0,0.5); }
-    .save-btn.flashing { animation:save-flash 0.6s ease; }
-
-    .stat-card {
-      background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07);
-      border-radius:10px; padding:14px 10px; text-align:center; flex:1; transition:transform 0.2s;
-    }
-    .stat-card:hover { transform:translateY(-3px); }
-
-    input[type=date], select, textarea {
-      background:rgba(255,255,255,0.05); border:1.5px solid rgba(255,77,0,0.3);
-      border-radius:6px; color:#e8edf2; font-family:'Barlow Condensed',sans-serif;
-      font-size:14px; padding:7px 10px; outline:none; cursor:pointer;
-    }
-    select, textarea { border-color:rgba(255,255,255,0.1); color:#9ca3af; font-family:'Barlow',sans-serif; font-size:12px; width:100%; }
-    input[type=date]:focus, select:focus, textarea:focus { border-color:#ff4d00; }
-    textarea { resize:none; }
-
-    .divider { height:2px; background:linear-gradient(90deg,#ff4d00,#ff8c0060,transparent); margin-bottom:6px; }
-    .tabs-bar { display:flex; border-bottom:1px solid rgba(255,255,255,0.07); margin-bottom:24px; }
-    .stats-bar { display:flex; gap:10px; margin-bottom:24px; flex-wrap:wrap; }
-    .row-flex { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-    .empty { text-align:center; padding:60px 0; color:#374151; }
-    .badge-saved { font-size:10px; background:rgba(0,255,135,0.1); color:#00ff87; border:1px solid #00ff87; border-radius:4px; padding:3px 8px; letter-spacing:1px; }
-    .toast {
-      position:fixed; bottom:32px; left:50%; transform:translateX(-50%);
-      background:linear-gradient(135deg,#ff4d00,#ff8c00); color:white; border-radius:8px;
-      padding:12px 28px; font-family:'Barlow Condensed',sans-serif; font-weight:700;
-      font-size:14px; letter-spacing:2px; box-shadow:0 8px 30px rgba(255,77,0,0.5);
-      animation:toast-in 0.3s ease; z-index:100; white-space:nowrap;
-    }
-    .note-link { background:none; border:none; cursor:pointer; color:#374151; font-size:11px; font-family:'Barlow',sans-serif; padding:0; }
-    .note-link:hover { color:#6b7280; }
-    .hist-card {
-      background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.06);
-      border-radius:10px; padding:16px 20px; margin-bottom:10px; cursor:pointer; transition:border-color 0.2s;
-    }
-    .hist-card:hover { border-color:rgba(255,77,0,0.3); }
-    .prog-bar { margin-top:10px; height:3px; background:rgba(255,255,255,0.06); border-radius:2px; overflow:hidden; }
+    @keyframes slide-in { from{opacity:0;transform:translateX(-20px)} to{opacity:1;transform:translateX(0)} }
+    @keyframes flame { 0%,100%{transform:scaleY(1) rotate(-1deg)} 50%{transform:scaleY(1.05) rotate(1deg)} }
+    @keyframes save-flash { 0%{background:#ff4d00} 50%{background:#00ff87} 100%{background:#ff4d00} }
+    @keyframes toast-in { from{opacity:0;transform:translateY(20px) translateX(-50%)} to{opacity:1;transform:translateY(0) translateX(-50%)} }
+    @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+    .grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(255,77,0,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,77,0,0.04) 1px,transparent 1px);background-size:40px 40px}
+    .glow{position:fixed;top:-100px;right:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(255,77,0,0.12) 0%,transparent 70%);pointer-events:none;z-index:0}
+    .wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:24px 16px}
+    .status-btn{cursor:pointer;border:1.5px solid transparent;border-radius:4px;padding:5px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;transition:all 0.15s;background:rgba(255,255,255,0.04);color:#6b7280}
+    .status-btn:hover{opacity:0.85;transform:translateY(-1px)}
+    .btn-Present.active{background:rgba(0,255,135,0.15);border-color:#00ff87;color:#00ff87}
+    .btn-Absent.active{background:rgba(255,77,109,0.15);border-color:#ff4d6d;color:#ff4d6d}
+    .btn-HalfDay.active{background:rgba(255,214,10,0.15);border-color:#ffd60a;color:#ffd60a}
+    .btn-Leave.active{background:rgba(167,139,250,0.15);border-color:#a78bfa;color:#a78bfa}
+    .tab-btn{cursor:pointer;background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;letter-spacing:2px;padding:10px 24px;color:#4b5563;border-bottom:2px solid transparent;transition:all 0.2s;text-transform:uppercase}
+    .tab-btn.active{color:#ff4d00;border-bottom-color:#ff4d00}
+    .tab-btn:hover{color:#e8edf2}
+    .emp-row{animation:slide-in 0.3s ease both;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px 16px;margin-bottom:8px;transition:border-color 0.2s}
+    .emp-row:hover{border-color:rgba(255,77,0,0.25)}
+    .save-btn{cursor:pointer;background:linear-gradient(135deg,#ff4d00,#ff8c00);border:none;border-radius:8px;padding:14px 36px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;letter-spacing:3px;color:white;text-transform:uppercase;transition:all 0.2s;box-shadow:0 4px 20px rgba(255,77,0,0.35)}
+    .save-btn:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(255,77,0,0.5)}
+    .save-btn:disabled{opacity:0.5;cursor:not-allowed;transform:none}
+    .save-btn.flashing{animation:save-flash 0.6s ease}
+    .stat-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px 10px;text-align:center;flex:1;transition:transform 0.2s}
+    .stat-card:hover{transform:translateY(-3px)}
+    input[type=date]{background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,77,0,0.3);border-radius:6px;color:#e8edf2;font-family:'Barlow Condensed',sans-serif;font-size:14px;padding:7px 10px;outline:none;cursor:pointer}
+    input[type=date]:focus{border-color:#ff4d00}
+    select{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#9ca3af;font-family:'Barlow',sans-serif;font-size:12px;padding:7px 8px;outline:none;cursor:pointer;width:100%;border-radius:5px}
+    select:focus{border-color:#ff4d00}
+    textarea{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:5px;color:#9ca3af;font-family:'Barlow',sans-serif;font-size:12px;padding:6px 8px;outline:none;resize:none;width:100%}
+    textarea:focus{border-color:#ff4d00}
+    .divider{height:2px;background:linear-gradient(90deg,#ff4d00,#ff8c0060,transparent);margin-bottom:6px}
+    .tabs-bar{display:flex;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:24px}
+    .stats-bar{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap}
+    .row-flex{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    .empty{text-align:center;padding:60px 0;color:#374151}
+    .badge-saved{font-size:10px;background:rgba(0,255,135,0.1);color:#00ff87;border:1px solid #00ff87;border-radius:4px;padding:3px 8px;letter-spacing:1px}
+    .toast{position:fixed;bottom:32px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#ff4d00,#ff8c00);color:white;border-radius:8px;padding:12px 28px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:2px;box-shadow:0 8px 30px rgba(255,77,0,0.5);animation:toast-in 0.3s ease;z-index:100;white-space:nowrap}
+    .note-link{background:none;border:none;cursor:pointer;color:#374151;font-size:11px;font-family:'Barlow',sans-serif;padding:0}
+    .note-link:hover{color:#6b7280}
+    .hist-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:16px 20px;margin-bottom:10px;cursor:pointer;transition:border-color 0.2s}
+    .hist-card:hover{border-color:rgba(255,77,0,0.3)}
+    .spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,0.15);border-top-color:#ff4d00;border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block;vertical-align:middle;margin-right:8px}
+    .sync-dot{width:7px;height:7px;border-radius:50%;background:#00ff87;display:inline-block;margin-right:5px;box-shadow:0 0 5px #00ff87}
   </style>
 </head>
 <body>
 <div class="grid-bg"></div>
 <div class="glow"></div>
 <div class="wrap" id="root"></div>
-
 <script type="text/babel">
-const { useState, useEffect } = React;
-
+const { useState, useEffect, useRef } = React;
 const EMPLOYEES = [
-  { id: 1, name: "Sai Vaidya",     role: "Trainer",    avatar: "SV", shift: "Morning (6AM–10AM)"   },
-  { id: 2, name: "Karan Honmane",  role: "Reception",  avatar: "KH", shift: "Afternoon (11AM–4PM)" },
-  { id: 3, name: "Aniket Mane",    role: "Trainer",    avatar: "AM", shift: "Evening (5PM–10PM)"   },
+  { id:"emp1", name:"Sai Vaidya",    role:"Trainer",   avatar:"SV", shift:"Morning (6AM–10AM)"   },
+  { id:"emp2", name:"Karan Honmane", role:"Reception", avatar:"KH", shift:"Afternoon (11AM–4PM)" },
+  { id:"emp3", name:"Aniket Mane",   role:"Trainer",   avatar:"AM", shift:"Evening (5PM–10PM)"   },
 ];
-const SHIFTS = ["Morning (6AM–10AM)", "Afternoon (11AM–4PM)", "Evening (5PM–10PM)"];
+const SHIFTS = ["Morning (6AM–10AM)","Afternoon (11AM–4PM)","Evening (5PM–10PM)"];
 const STATUS_CFG = {
-  Present:  { color:"#00ff87", bg:"rgba(0,255,135,0.12)"   },
-  Absent:   { color:"#ff4d6d", bg:"rgba(255,77,109,0.12)"  },
-  "Half Day":{ color:"#ffd60a", bg:"rgba(255,214,10,0.12)" },
-  Leave:    { color:"#a78bfa", bg:"rgba(167,139,250,0.12)" },
+  Present:   {color:"#00ff87",bg:"rgba(0,255,135,0.12)"},
+  Absent:    {color:"#ff4d6d",bg:"rgba(255,77,109,0.12)"},
+  "Half Day":{color:"#ffd60a",bg:"rgba(255,214,10,0.12)"},
+  Leave:     {color:"#a78bfa",bg:"rgba(167,139,250,0.12)"},
 };
+function today(){ return new Date().toISOString().split("T")[0]; }
+function fmtDate(d){ return new Date(d+"T00:00:00").toLocaleDateString("en-IN",{weekday:"short",day:"2-digit",month:"short",year:"numeric"}); }
 
-function today() { return new Date().toISOString().split("T")[0]; }
-function fmtDate(d) {
-  return new Date(d+"T00:00:00").toLocaleDateString("en-IN",{weekday:"short",day:"2-digit",month:"short",year:"numeric"});
-}
-function load(k,fb){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):fb; }catch{ return fb; } }
-function save(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} }
+function App(){
+  const [fbReady,  setFbReady]  = useState(!!window._fbReady);
+  const [date,     setDate]     = useState(today());
+  const [dayData,  setDayData]  = useState(null);
+  const [allDates, setAllDates] = useState([]);
+  const [tab,      setTab]      = useState("mark");
+  const [saving,   setSaving]   = useState(false);
+  const [loading,  setLoading]  = useState(true);
+  const [flash,    setFlash]    = useState(false);
+  const [editNote, setEditNote] = useState(null);
+  const [toast,    setToast]    = useState(null);
+  const unsubRef = useRef(null);
 
-function App() {
-  const [date,    setDate]    = useState(today());
-  const [att,     setAtt]     = useState(() => load("sg_att",{}));
-  const [shifts,  setShifts]  = useState(() => load("sg_shifts",{}));
-  const [notes,   setNotes]   = useState(() => load("sg_notes",{}));
-  const [saved,   setSaved]   = useState(() => load("sg_saved",[]));
-  const [tab,     setTab]     = useState("mark");
-  const [flash,   setFlash]   = useState(false);
-  const [editNote,setEditNote]= useState(null);
-  const [toast,   setToast]   = useState(null);
+  useEffect(()=>{
+    if(window._fbReady){setFbReady(true);return;}
+    const h=()=>setFbReady(true);
+    window.addEventListener("firebaseReady",h);
+    return ()=>window.removeEventListener("firebaseReady",h);
+  },[]);
 
-  useEffect(()=>save("sg_att",att),    [att]);
-  useEffect(()=>save("sg_shifts",shifts),[shifts]);
-  useEffect(()=>save("sg_notes",notes), [notes]);
-  useEffect(()=>save("sg_saved",saved), [saved]);
+  useEffect(()=>{
+    if(!fbReady)return;
+    window._loadAllDates().then(dates=>setAllDates(dates.sort((a,b)=>b.localeCompare(a))));
+  },[fbReady]);
 
-  const dayAtt    = att[date]    || {};
-  const dayShifts = shifts[date] || Object.fromEntries(EMPLOYEES.map(e=>[e.id,e.shift]));
-  const dayNotes  = notes[date]  || {};
+  useEffect(()=>{
+    if(!fbReady)return;
+    setLoading(true);
+    if(unsubRef.current)unsubRef.current();
+    unsubRef.current=window._listenAttendance(date,data=>{
+      setDayData(data||{statuses:{},shifts:Object.fromEntries(EMPLOYEES.map(e=>[e.id,e.shift])),notes:{}});
+      setLoading(false);
+    });
+    return ()=>{if(unsubRef.current)unsubRef.current();};
+  },[fbReady,date]);
 
-  const setStatus = (id,s) => setAtt(p=>({...p,[date]:{...(p[date]||{}),[id]:s}}));
-  const setShift  = (id,s) => setShifts(p=>({...p,[date]:{...(p[date]||{}),[id]:s}}));
-  const setNote   = (id,n) => setNotes(p=>({...p,[date]:{...(p[date]||{}),[id]:n}}));
+  const statuses  = dayData?.statuses||{};
+  const dayShifts = dayData?.shifts||Object.fromEntries(EMPLOYEES.map(e=>[e.id,e.shift]));
+  const dayNotes  = dayData?.notes||{};
+  const upd=(field,id,val)=>setDayData(p=>({...p,[field]:{...(p?.[field]||{}),[id]:val}}));
 
-  const doSave = () => {
-    setFlash(true);
-    setSaved(p=>p.includes(date)?p:[...p,date]);
-    setTimeout(()=>setFlash(false),1000);
-    setToast("Attendance saved!");
-    setTimeout(()=>setToast(null),2500);
+  const doSave=async()=>{
+    setSaving(true);
+    try{
+      await window._saveAttendance(date,dayData);
+      setAllDates(p=>p.includes(date)?p:[date,...p].sort((a,b)=>b.localeCompare(a)));
+      setFlash(true); setTimeout(()=>setFlash(false),1000);
+      showToast("✓ Saved & synced to all phones!");
+    }catch(e){ showToast("❌ Save failed. Check connection."); }
+    setSaving(false);
+  };
+  const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(null),3000);};
+
+  const stats={
+    total:EMPLOYEES.length, marked:Object.keys(statuses).length,
+    present:Object.values(statuses).filter(s=>s==="Present").length,
+    absent:Object.values(statuses).filter(s=>s==="Absent").length,
+    halfDay:Object.values(statuses).filter(s=>s==="Half Day").length,
+    leave:Object.values(statuses).filter(s=>s==="Leave").length,
   };
 
-  const stats = {
-    total: EMPLOYEES.length,
-    marked: Object.keys(dayAtt).length,
-    present:  Object.values(dayAtt).filter(s=>s==="Present").length,
-    absent:   Object.values(dayAtt).filter(s=>s==="Absent").length,
-    halfDay:  Object.values(dayAtt).filter(s=>s==="Half Day").length,
-    leave:    Object.values(dayAtt).filter(s=>s==="Leave").length,
-  };
+  if(!fbReady) return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"80vh",gap:16}}>
+      <div style={{fontSize:48}}>🔥</div>
+      <div style={{fontSize:22,fontWeight:900,letterSpacing:3}}>SURYA GYM 2.0</div>
+      <div><span className="spinner"></span><span style={{color:"#6b7280",fontSize:13,fontFamily:"'Barlow',sans-serif"}}>Connecting...</span></div>
+    </div>
+  );
 
-  const history = [...saved].sort((a,b)=>b.localeCompare(a));
-
-  return (
-    <div>
-      {/* Header */}
-      <div style={{marginBottom:28}}>
-        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:8}}>
-          <div style={{width:48,height:48,background:"linear-gradient(135deg,#ff4d00,#ff8c00)",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,animation:"flame 2s ease-in-out infinite",boxShadow:"0 4px 20px rgba(255,77,0,0.5)"}}>🔥</div>
-          <div>
-            <div style={{fontSize:11,letterSpacing:4,color:"#ff4d00",fontWeight:700,textTransform:"uppercase"}}>Surya Gym 2.0</div>
-            <div style={{fontSize:30,fontWeight:900,letterSpacing:1,lineHeight:1.1,textTransform:"uppercase"}}>Staff Attendance</div>
-          </div>
-          <div style={{marginLeft:"auto",textAlign:"right"}}>
-            <div style={{fontSize:11,color:"#4b5563",letterSpacing:2}}>TODAY</div>
-            <div style={{fontSize:13,color:"#9ca3af",fontFamily:"'Barlow',sans-serif"}}>{fmtDate(today())}</div>
-          </div>
+  return(<div>
+    {/* Header */}
+    <div style={{marginBottom:28}}>
+      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:8}}>
+        <div style={{width:48,height:48,background:"linear-gradient(135deg,#ff4d00,#ff8c00)",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,animation:"flame 2s ease-in-out infinite",boxShadow:"0 4px 20px rgba(255,77,0,0.5)"}}>🔥</div>
+        <div>
+          <div style={{fontSize:11,letterSpacing:4,color:"#ff4d00",fontWeight:700,textTransform:"uppercase"}}>Surya Gym 2.0</div>
+          <div style={{fontSize:30,fontWeight:900,letterSpacing:1,lineHeight:1.1,textTransform:"uppercase"}}>Staff Attendance</div>
         </div>
-        <div className="divider"/>
-      </div>
-
-      {/* Stats */}
-      <div className="stats-bar">
-        {[["Total",stats.total,"#e8edf2"],["Present",stats.present,"#00ff87"],["Absent",stats.absent,"#ff4d6d"],["Half Day",stats.halfDay,"#ffd60a"],["On Leave",stats.leave,"#a78bfa"],["Marked",`${stats.marked}/${stats.total}`,"#ff8c00"]].map(([l,v,c])=>(
-          <div key={l} className="stat-card">
-            <div style={{fontSize:24,fontWeight:900,color:c,lineHeight:1}}>{v}</div>
-            <div style={{fontSize:9,color:"#6b7280",letterSpacing:1,marginTop:3,fontFamily:"'Barlow',sans-serif",textTransform:"uppercase"}}>{l}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Tabs */}
-      <div className="tabs-bar">
-        {[["mark","Mark Attendance"],["history","History"],["summary","Summary"]].map(([id,lbl])=>(
-          <button key={id} className={`tab-btn${tab===id?" active":""}`} onClick={()=>setTab(id)}>{lbl}</button>
-        ))}
-      </div>
-
-      {/* MARK TAB */}
-      {tab==="mark" && <div>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:8}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-            <span style={{fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>DATE</span>
-            <input type="date" value={date} onChange={e=>setDate(e.target.value)} max={today()}/>
-            {saved.includes(date) && <span className="badge-saved">✓ SAVED</span>}
-          </div>
-          <button className="status-btn" onClick={()=>{
-            const u={};EMPLOYEES.forEach(e=>u[e.id]="Present");
-            setAtt(p=>({...p,[date]:{...(p[date]||{}),...u}}));
-          }}>✓ ALL PRESENT</button>
+        <div style={{marginLeft:"auto",textAlign:"right"}}>
+          <div style={{fontSize:11,color:"#4b5563",letterSpacing:2}}>TODAY</div>
+          <div style={{fontSize:13,color:"#9ca3af",fontFamily:"'Barlow',sans-serif"}}>{fmtDate(today())}</div>
+          <div style={{marginTop:4}}><span className="sync-dot"></span><span style={{fontSize:10,color:"#00ff87",fontFamily:"'Barlow',sans-serif"}}>LIVE SYNC ON</span></div>
         </div>
+      </div>
+      <div className="divider"/>
+    </div>
 
-        {EMPLOYEES.map((emp,i)=>{
-          const status = dayAtt[emp.id];
-          const shift  = dayShifts[emp.id]||"";
-          const note   = dayNotes[emp.id]||"";
-          const cfg    = status?STATUS_CFG[status]:null;
-          return (
+    {/* Stats */}
+    <div className="stats-bar">
+      {[["Total",stats.total,"#e8edf2"],["Present",stats.present,"#00ff87"],["Absent",stats.absent,"#ff4d6d"],["Half Day",stats.halfDay,"#ffd60a"],["On Leave",stats.leave,"#a78bfa"],["Marked",`${stats.marked}/${stats.total}`,"#ff8c00"]].map(([l,v,c])=>(
+        <div key={l} className="stat-card">
+          <div style={{fontSize:24,fontWeight:900,color:c,lineHeight:1}}>{v}</div>
+          <div style={{fontSize:9,color:"#6b7280",letterSpacing:1,marginTop:3,fontFamily:"'Barlow',sans-serif",textTransform:"uppercase"}}>{l}</div>
+        </div>
+      ))}
+    </div>
+
+    {/* Tabs */}
+    <div className="tabs-bar">
+      {[["mark","Mark Attendance"],["history","History"],["summary","Summary"]].map(([id,lbl])=>(
+        <button key={id} className={`tab-btn${tab===id?" active":""}`} onClick={()=>setTab(id)}>{lbl}</button>
+      ))}
+    </div>
+
+    {/* MARK TAB */}
+    {tab==="mark"&&<div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:8}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <span style={{fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>DATE</span>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)} max={today()}/>
+          {allDates.includes(date)&&<span className="badge-saved">✓ SAVED</span>}
+        </div>
+        <button className="status-btn" onClick={()=>{
+          const u={};EMPLOYEES.forEach(e=>u[e.id]="Present");
+          setDayData(p=>({...p,statuses:{...(p?.statuses||{}),...u}}));
+        }}>✓ ALL PRESENT</button>
+      </div>
+
+      {loading
+        ?<div style={{textAlign:"center",padding:"40px 0"}}><span className="spinner"></span><span style={{color:"#6b7280",fontFamily:"'Barlow',sans-serif",fontSize:13}}>Loading...</span></div>
+        :EMPLOYEES.map((emp,i)=>{
+          const status=statuses[emp.id];
+          const shift=dayShifts[emp.id]||"";
+          const note=dayNotes[emp.id]||"";
+          const cfg=status?STATUS_CFG[status]:null;
+          return(
             <div key={emp.id} className="emp-row" style={{animationDelay:`${i*0.06}s`,borderColor:cfg?`${cfg.color}30`:"rgba(255,255,255,0.06)"}}>
               <div className="row-flex">
-                <div style={{width:40,height:40,borderRadius:8,flexShrink:0,background:cfg?cfg.bg:"rgba(255,255,255,0.06)",border:`1.5px solid ${cfg?cfg.color:"rgba(255,255,255,0.1)"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:cfg?cfg.color:"#6b7280"}}>
-                  {emp.avatar}
-                </div>
+                <div style={{width:40,height:40,borderRadius:8,flexShrink:0,background:cfg?cfg.bg:"rgba(255,255,255,0.06)",border:`1.5px solid ${cfg?cfg.color:"rgba(255,255,255,0.1)"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:cfg?cfg.color:"#6b7280"}}>{emp.avatar}</div>
                 <div style={{flex:"0 0 150px"}}>
                   <div style={{fontSize:16,fontWeight:700}}>{emp.name}</div>
                   <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{emp.role}</div>
                 </div>
                 <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                   {["Present","Absent","Half Day","Leave"].map(s=>(
-                    <button key={s} className={`status-btn btn-${s.replace(" ","")}${status===s?" active":""}`} onClick={()=>setStatus(emp.id,s)}>
+                    <button key={s} className={`status-btn btn-${s.replace(" ","")}${status===s?" active":""}`} onClick={()=>upd("statuses",emp.id,s)}>
                       {s==="Present"?"✓":s==="Absent"?"✗":s==="Half Day"?"½":"◎"} {s.toUpperCase()}
                     </button>
                   ))}
                 </div>
                 <div style={{flex:"0 0 170px",marginLeft:"auto"}}>
-                  <select value={shift} onChange={e=>setShift(emp.id,e.target.value)}>
+                  <select value={shift} onChange={e=>upd("shifts",emp.id,e.target.value)}>
                     <option value="">— Shift —</option>
                     {SHIFTS.map(s=><option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
               {editNote===emp.id
-                ? <div style={{marginTop:8}}>
-                    <textarea rows={2} placeholder="Add note..." value={note} onChange={e=>setNote(emp.id,e.target.value)} onBlur={()=>setEditNote(null)} autoFocus/>
-                  </div>
-                : <div style={{marginTop:6,display:"flex",alignItems:"center",gap:8}}>
-                    {note && <span style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",fontStyle:"italic"}}>"{note}"</span>}
-                    <button className="note-link" onClick={()=>setEditNote(emp.id)}>+ note</button>
-                  </div>
+                ?<div style={{marginTop:8}}><textarea rows={2} placeholder="Add note..." value={note} onChange={e=>upd("notes",emp.id,e.target.value)} onBlur={()=>setEditNote(null)} autoFocus/></div>
+                :<div style={{marginTop:6,display:"flex",alignItems:"center",gap:8}}>
+                  {note&&<span style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",fontStyle:"italic"}}>"{note}"</span>}
+                  <button className="note-link" onClick={()=>setEditNote(emp.id)}>+ note</button>
+                </div>
               }
             </div>
           );
-        })}
-        <div style={{display:"flex",justifyContent:"flex-end",marginTop:24}}>
-          <button className={`save-btn${flash?" flashing":""}`} onClick={doSave}>SAVE ATTENDANCE</button>
-        </div>
+        })
+      }
+      {!loading&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:24}}>
+        <button className={`save-btn${flash?" flashing":""}`} onClick={doSave} disabled={saving}>
+          {saving?<><span className="spinner"></span>SAVING...</>:"SAVE & SYNC"}
+        </button>
       </div>}
+    </div>}
 
-      {/* HISTORY TAB */}
-      {tab==="history" && <div>
-        {history.length===0
-          ? <div className="empty"><div style={{fontSize:48,marginBottom:12}}>📋</div><div style={{fontSize:18,letterSpacing:2}}>NO RECORDS YET</div></div>
-          : history.map(d=>{
-              const r=att[d]||{};
-              const p=Object.values(r).filter(s=>s==="Present").length;
-              const a=Object.values(r).filter(s=>s==="Absent").length;
-              const h=Object.values(r).filter(s=>s==="Half Day").length;
-              const l=Object.values(r).filter(s=>s==="Leave").length;
-              const pct=EMPLOYEES.length?Math.round(p/EMPLOYEES.length*100):0;
-              return (
-                <div key={d} className="hist-card" onClick={()=>{setDate(d);setTab("mark");}}>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                    <div>
-                      <div style={{fontSize:17,fontWeight:700}}>{fmtDate(d)}</div>
-                      <div style={{display:"flex",gap:14,marginTop:6}}>
-                        {[["Present",p,"#00ff87"],["Absent",a,"#ff4d6d"],["Half Day",h,"#ffd60a"],["Leave",l,"#a78bfa"]].map(([lbl,val,c])=>(
-                          <span key={lbl} style={{fontSize:12,color:c,fontFamily:"'Barlow',sans-serif"}}><b>{val}</b> {lbl}</span>
-                        ))}
-                      </div>
-                    </div>
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:26,fontWeight:900,color:pct>=80?"#00ff87":pct>=50?"#ffd60a":"#ff4d6d"}}>{pct}%</div>
-                      <div style={{fontSize:9,color:"#4b5563",letterSpacing:1}}>ATTENDANCE</div>
-                    </div>
-                  </div>
-                  <div className="prog-bar"><div style={{width:`${pct}%`,height:"100%",background:`linear-gradient(90deg,#ff4d00,${pct>=80?"#00ff87":"#ffd60a"})`,borderRadius:2}}/></div>
-                </div>
-              );
-            })
-        }
-      </div>}
-
-      {/* SUMMARY TAB */}
-      {tab==="summary" && <div>
-        <div style={{marginBottom:16,fontSize:12,color:"#4b5563",fontFamily:"'Barlow',sans-serif",letterSpacing:1}}>INDIVIDUAL OVERVIEW — ALL RECORDED DAYS</div>
-        {EMPLOYEES.map((emp,i)=>{
-          let p=0,a=0,h=0,l=0,total=0;
-          saved.forEach(d=>{ const s=(att[d]||{})[emp.id]; if(s){total++;if(s==="Present")p++;else if(s==="Absent")a++;else if(s==="Half Day")h++;else if(s==="Leave")l++;} });
-          const rate=total?Math.round(p/total*100):null;
-          return (
-            <div key={emp.id} style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",alignItems:"center",gap:14,animation:"slide-in 0.3s ease both",animationDelay:`${i*0.06}s`}}>
-              <div style={{width:40,height:40,borderRadius:8,flexShrink:0,background:"linear-gradient(135deg,rgba(255,77,0,0.2),rgba(255,140,0,0.2))",border:"1.5px solid rgba(255,77,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#ff8c00"}}>{emp.avatar}</div>
-              <div style={{flex:1}}>
-                <div style={{fontSize:16,fontWeight:700}}>{emp.name}</div>
-                <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{emp.role}</div>
-                <div style={{display:"flex",gap:12,marginTop:4}}>
-                  {[["P",p,"#00ff87"],["A",a,"#ff4d6d"],["H",h,"#ffd60a"],["L",l,"#a78bfa"]].map(([lbl,val,c])=>(
-                    <span key={lbl} style={{fontSize:11,fontFamily:"'Barlow',sans-serif"}}><span style={{color:c,fontWeight:700}}>{val}</span> <span style={{color:"#4b5563"}}>{lbl}</span></span>
-                  ))}
-                  <span style={{fontSize:11,color:"#4b5563",fontFamily:"'Barlow',sans-serif"}}>/ {total} days</span>
-                </div>
+    {/* HISTORY TAB */}
+    {tab==="history"&&<div>
+      {allDates.length===0
+        ?<div className="empty"><div style={{fontSize:48,marginBottom:12}}>📋</div><div style={{fontSize:18,letterSpacing:2}}>NO RECORDS YET</div></div>
+        :allDates.map(d=>(
+          <div key={d} className="hist-card" onClick={()=>{setDate(d);setTab("mark");}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div>
+                <div style={{fontSize:17,fontWeight:700}}>{fmtDate(d)}</div>
+                <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginTop:4}}>Tap to view &amp; edit</div>
               </div>
-              <div style={{textAlign:"right"}}>
-                {rate!==null
-                  ? <><div style={{fontSize:26,fontWeight:900,color:rate>=80?"#00ff87":rate>=60?"#ffd60a":"#ff4d6d"}}>{rate}%</div><div style={{fontSize:9,color:"#4b5563",letterSpacing:1}}>ATTEND RATE</div></>
-                  : <div style={{fontSize:12,color:"#374151",fontFamily:"'Barlow',sans-serif"}}>No data</div>
-                }
-              </div>
+              <div style={{fontSize:11,background:"rgba(255,77,0,0.1)",color:"#ff8c00",border:"1px solid rgba(255,77,0,0.3)",borderRadius:4,padding:"4px 10px",letterSpacing:1}}>VIEW →</div>
             </div>
-          );
-        })}
-      </div>}
+          </div>
+        ))
+      }
+    </div>}
 
-      {toast && <div className="toast">✓ {toast}</div>}
-    </div>
-  );
+    {/* SUMMARY TAB */}
+    {tab==="summary"&&<SummaryTab allDates={allDates}/>}
+
+    {toast&&<div className="toast">{toast}</div>}
+  </div>);
+}
+
+function SummaryTab({allDates}){
+  const [allData,setAllData]=useState({});
+  const [loading,setLoading]=useState(true);
+  useEffect(()=>{
+    if(allDates.length===0){setLoading(false);return;}
+    Promise.all(allDates.map(d=>window._loadAttendance(d).then(data=>[d,data]))).then(results=>{
+      const map={};
+      results.forEach(([d,data])=>{if(data)map[d]=data;});
+      setAllData(map);setLoading(false);
+    });
+  },[allDates]);
+
+  if(loading)return<div style={{textAlign:"center",padding:"40px 0"}}><span className="spinner"></span><span style={{color:"#6b7280",fontFamily:"'Barlow',sans-serif",fontSize:13}}>Loading summary...</span></div>;
+
+  return<div>
+    <div style={{marginBottom:16,fontSize:12,color:"#4b5563",fontFamily:"'Barlow',sans-serif",letterSpacing:1}}>INDIVIDUAL OVERVIEW — ALL RECORDED DAYS</div>
+    {EMPLOYEES.map((emp,i)=>{
+      let p=0,a=0,h=0,l=0,total=0;
+      Object.values(allData).forEach(data=>{
+        const s=(data?.statuses||{})[emp.id];
+        if(s){total++;if(s==="Present")p++;else if(s==="Absent")a++;else if(s==="Half Day")h++;else if(s==="Leave")l++;}
+      });
+      const rate=total?Math.round(p/total*100):null;
+      return(
+        <div key={emp.id} style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:10,padding:"14px 18px",marginBottom:8,display:"flex",alignItems:"center",gap:14,animation:"slide-in 0.3s ease both",animationDelay:`${i*0.06}s`}}>
+          <div style={{width:40,height:40,borderRadius:8,flexShrink:0,background:"linear-gradient(135deg,rgba(255,77,0,0.2),rgba(255,140,0,0.2))",border:"1.5px solid rgba(255,77,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#ff8c00"}}>{emp.avatar}</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:16,fontWeight:700}}>{emp.name}</div>
+            <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif"}}>{emp.role}</div>
+            <div style={{display:"flex",gap:12,marginTop:4}}>
+              {[["P",p,"#00ff87"],["A",a,"#ff4d6d"],["H",h,"#ffd60a"],["L",l,"#a78bfa"]].map(([lbl,val,c])=>(
+                <span key={lbl} style={{fontSize:11,fontFamily:"'Barlow',sans-serif"}}><span style={{color:c,fontWeight:700}}>{val}</span> <span style={{color:"#4b5563"}}>{lbl}</span></span>
+              ))}
+              <span style={{fontSize:11,color:"#4b5563",fontFamily:"'Barlow',sans-serif"}}>/ {total} days</span>
+            </div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            {rate!==null
+              ?<><div style={{fontSize:26,fontWeight:900,color:rate>=80?"#00ff87":rate>=60?"#ffd60a":"#ff4d6d"}}>{rate}%</div><div style={{fontSize:9,color:"#4b5563",letterSpacing:1}}>ATTEND RATE</div></>
+              :<div style={{fontSize:12,color:"#374151",fontFamily:"'Barlow',sans-serif"}}>No data</div>
+            }
+          </div>
+        </div>
+      );
+    })}
+  </div>;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
-
 <script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
-  });
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{ navigator.serviceWorker.register('/service-worker.js').catch(()=>{}); });
 }
 </script>
 </body>
