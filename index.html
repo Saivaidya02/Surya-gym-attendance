@@ -55,6 +55,10 @@
     window._listenMemberAttend=(date,g,cb)    => onSnapshot(doc(db,P(g,"memberattend"),date),s=>cb(s.exists()?s.data():null));
     window._saveGymConfig    = async (d,g)    => await setDoc(doc(db,P(g,"config"),"gymconfig"),d);
     window._listenGymConfig  = (g,cb)         => onSnapshot(doc(db,P(g,"config"),"gymconfig"),s=>cb(s.exists()?s.data():{}));
+    window._saveAnnouncement  = async (id,d,g) => await setDoc(doc(db,P(g,"announcements"),id),d);
+    window._listenAnnouncements = (g,cb)       => onSnapshot(collection(db,P(g,"announcements")),s=>cb(s.docs.map(d=>d.data()).sort((a,b)=>(b.date||"").localeCompare(a.date||""))));
+    window._saveAdvanceRequest  = async (id,d,g) => await setDoc(doc(db,P(g,"advances"),id),d);
+    window._listenAdvances      = (g,cb)       => onSnapshot(collection(db,P(g,"advances")),s=>cb(s.docs.map(d=>d.data())));
     window._fbReady = true;
     window.dispatchEvent(new Event("firebaseReady"));
   </script>
@@ -609,6 +613,7 @@ function App(){
         session={session} staff={staff} allDates={allDates}
         leaveReqs={leaveReqs} showToast={showToast}
         ptClients={ptClients} ptSessions={ptSessions} gymId={activeGymId}
+        salaryConfig={salaryConfig} gymConfig={gymConfig}
         onSaveSession={async(id,d)=>await window._savePTSession(id,d,activeGymId)}
         onApprove={async(req)=>{
           const updated={...req,status:"approved",updatedAt:new Date().toISOString()};
@@ -695,7 +700,7 @@ function App(){
 
     {/* Tabs */}
     <div className="tabs-bar">
-      {[["mark","Mark Attendance"],["members","👥 Members"],["calendar","📅 Calendar"],["history","History"],["summary","Summary"],["payroll","💰 Payroll"],["leave","🏖 Leave"],["pt","💪 PT"],["revenue","📊 Revenue"],["export","📤 Export"]].map(([id,lbl])=>(
+      {[["mark","Mark Attendance"],["members","👥 Members"],["calendar","📅 Calendar"],["history","History"],["summary","Summary"],["payroll","💰 Payroll"],["leave","🏖 Leave"],["pt","💪 PT"],["revenue","📊 Revenue"],["announce","📢 Announce"],["export","📤 Export"]].map(([id,lbl])=>(
         <button key={id} className={`tab-btn${tab===id?" active":""}`} onClick={()=>setTab(id)}>{lbl}</button>
       ))}
     </div>
@@ -874,6 +879,7 @@ function App(){
       onSaveGymConfig={async(d)=>{await window._saveGymConfig(d,activeGymId);setGymConfig(d);showToast("✓ Settings saved!");}}
     />}
 
+    {tab==="announce"&&<AnnouncementsTab gymId={activeGymId} staff={staff} showToast={showToast}/>}
     {tab==="revenue"&&<RevenueTab members={members} gymConfig={gymConfig} gymId={activeGymId} gymName={gymList.find(g=>g.id===activeGymId)?.name||"Surya Gym 2.0"} onSaveGymConfig={async(d)=>{await window._saveGymConfig(d,activeGymId);setGymConfig(d);showToast("✓ Settings saved!");}}/>}
 
     {tab==="pt"&&<PTTab staff={staff} ptClients={ptClients} ptSessions={ptSessions} gymId={activeGymId} showToast={showToast}
@@ -2745,13 +2751,17 @@ function LoginGate({staff, members, onLogin}){
 }
 
 /* ── STAFF PORTAL ── */
-function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove, onReject, onLogout, ptClients, ptSessions, gymId, onSaveSession}){
+function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove, onReject, onLogout, ptClients, ptSessions, gymId, onSaveSession, salaryConfig, gymConfig}){
   const emp = session.emp;
   const [portalTab, setPortalTab] = useState("dashboard");
   const [allData, setAllData]     = useState({});
   const [loadingData, setLoadingData] = useState(true);
   const [dayData, setDayData]     = useState(null);
   const [todayLoaded, setTodayLoaded] = useState(false);
+  const [payrollData, setPayrollData] = useState({});
+  const [announcements, setAnnouncements] = useState([]);
+  const [advanceForm, setAdvanceForm] = useState({amount:"", reason:""});
+  const [showAdvance, setShowAdvance] = useState(false);
 
   // Load all attendance for this employee
   useEffect(()=>{
@@ -2763,7 +2773,7 @@ function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove,
     });
   },[allDates]);
 
-  // Listen to today for punch in/out
+  // Listen to today
   useEffect(()=>{
     const unsub = window._listenAttendance(today(), gymId||'gym_default', data=>{
       setDayData(data||{statuses:{},shifts:{},notes:{},punchIn:{},punchOut:{}});
@@ -2771,6 +2781,22 @@ function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove,
     });
     return ()=>unsub();
   },[]);
+
+  // Load last 3 months payroll
+  useEffect(()=>{
+    const now=new Date();
+    const months=[0,1,2].map(i=>{const d=new Date(now.getFullYear(),now.getMonth()-i,1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;});
+    Promise.all(months.map(mk=>window._loadPayroll(mk,gymId||'gym_default').then(d=>[mk,d]))).then(res=>{
+      const map={};res.forEach(([mk,d])=>{if(d)map[mk]=d;});setPayrollData(map);
+    }).catch(()=>{});
+  },[gymId]);
+
+  // Load announcements
+  useEffect(()=>{
+    if(!window._listenAnnouncements) return;
+    const unsub=window._listenAnnouncements(gymId||'gym_default',data=>setAnnouncements(data||[]));
+    return ()=>unsub&&unsub();
+  },[gymId]);
 
   const punchIn  = dayData?.punchIn?.[emp.id];
   const punchOut = dayData?.punchOut?.[emp.id];
@@ -2802,31 +2828,133 @@ function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove,
     showToast("✓ Marked as "+status);
   };
 
-  // Stats
-  let present=0,absent=0,halfDay=0,leave=0,totalMins=0;
-  Object.values(allData).forEach(data=>{
+  // ── Helper: parse "HH:MM AM/PM" → minutes
+  const toMins = t => {
+    if(!t) return null;
+    const [tm,ap]=(t||"").split(" ");
+    const [h,m]=(tm||"00:00").split(":").map(Number);
+    let hr=h;
+    if(ap==="PM"&&h!==12)hr+=12;
+    if(ap==="AM"&&h===12)hr=0;
+    return hr*60+m;
+  };
+
+  // ── Stats from all historical data
+  let present=0,absent=0,halfDay=0,leave=0,totalMins=0,sessionCount=0;
+  const thisMonthKey=today().slice(0,7);
+  let monthMins=0, monthPresent=0;
+  Object.entries(allData).forEach(([d,data])=>{
     const s=(data?.statuses||{})[emp.id];
     const pin=(data?.punchIn||{})[emp.id];
     const pout=(data?.punchOut||{})[emp.id];
-    if(s==="Present"||s==="Half Day") present++;
+    if(s==="Present"||s==="Half Day"){present++;if(d.startsWith(thisMonthKey))monthPresent++;}
     if(s==="Absent") absent++;
     if(s==="Half Day") halfDay++;
     if(s==="Leave") leave++;
     if(pin&&pout){
-      const pt=t=>{const[tm,ap]=t.split(" ");const[h,m]=(tm||"00:00").split(":").map(Number);let hr=h;if(ap==="PM"&&h!==12)hr+=12;if(ap==="AM"&&h===12)hr=0;return hr*60+m;};
-      const d=pt(pout)-pt(pin); if(d>0)totalMins+=d;
+      const diff=toMins(pout)-toMins(pin);
+      if(diff>0){totalMins+=diff;if(d.startsWith(thisMonthKey))monthMins+=diff;}
     }
   });
   const total=present+absent+leave;
   const rate=total?Math.round(present/total*100):0;
+  const avgMins=present>0?Math.round(totalMins/present):0;
   const myLeaves=leaveReqs.filter(r=>r.empId===emp.id).sort((a,b)=>b.submittedAt?.localeCompare(a.submittedAt||"")||0);
 
+  // ── Weekly summary (Mon–Sun this week)
+  const getWeekDays = () => {
+    const d=new Date(); const day=d.getDay(); const mon=new Date(d);
+    mon.setDate(d.getDate()-(day===0?6:day-1));
+    return Array.from({length:7},(_,i)=>{const x=new Date(mon);x.setDate(mon.getDate()+i);return x.toISOString().split("T")[0];});
+  };
+  const weekDays = getWeekDays();
+  const DAY_LABELS=["M","T","W","T","F","S","S"];
+
+  // ── Shift reminder
+  const getShiftReminder = () => {
+    const shift=emp.shift||"";
+    const match=shift.match(/(\d+)(AM|PM)/i);
+    if(!match) return null;
+    let hr=parseInt(match[1]);
+    const ap=match[2].toUpperCase();
+    if(ap==="PM"&&hr!==12)hr+=12;
+    if(ap==="AM"&&hr===12)hr=0;
+    const shiftStart=hr*60;
+    const now=new Date();
+    const nowM=now.getHours()*60+now.getMinutes();
+    const diff=shiftStart-nowM;
+    if(diff>0&&diff<=60) return `⏰ Your shift starts in ${diff} min`;
+    if(diff>60&&diff<=120) return `⏰ Shift in ${Math.round(diff/60)}h — get ready!`;
+    return null;
+  };
+  const shiftReminder=getShiftReminder();
+
+  // ── Late punch-in check
+  const isLatePunchIn = () => {
+    if(!punchIn) return false;
+    const shift=emp.shift||"";
+    const match=shift.match(/(\d+)(AM|PM)/i);
+    if(!match) return false;
+    let hr=parseInt(match[1]);
+    const ap=match[2].toUpperCase();
+    if(ap==="PM"&&hr!==12)hr+=12;
+    if(ap==="AM"&&hr===12)hr=0;
+    const shiftStartMins=hr*60+30; // 30min grace
+    return toMins(punchIn)>(shiftStartMins);
+  };
+
+  // ── Salary card
+  const monthlySalary=parseFloat(salaryConfig?.[emp.id])||0;
+  const workDays=26;
+  const perDay=workDays>0?monthlySalary/workDays:0;
+  const monthAbsent=Object.entries(allData).filter(([d,data])=>d.startsWith(thisMonthKey)&&(data?.statuses||{})[emp.id]==="Absent").length;
+  const deduction=Math.round(monthAbsent*perDay);
+  const netSalary=Math.max(0,monthlySalary-deduction);
+  const now2=new Date();
+  const curMonthKey=`${now2.getFullYear()}-${String(now2.getMonth()+1).padStart(2,"0")}`;
+  const payrollStatus=payrollData[curMonthKey]?.[emp.id]?.status||"pending";
+
+  // ── Upcoming approved leaves
+  const upcomingLeaves=myLeaves.filter(r=>r.status==="approved"&&(r.dates||[]).some(d=>d>=today()));
+
+  // ── Leave balance (assuming 2 casual leaves per month allowed)
+  const LEAVE_LIMIT=2;
+  const thisMonthLeaves=myLeaves.filter(r=>r.status==="approved"&&(r.submittedAt||"").startsWith(thisMonthKey));
+  const leaveBalance=Math.max(0,LEAVE_LIMIT-thisMonthLeaves.length);
+
+  // ── PT stats
+  const myPTClients=(ptClients||[]).filter(cl=>cl.trainerId===emp.id);
+  const ptSess=ptSessions||[];
+  const doneSessTotal=myPTClients.reduce((s,cl)=>s+ptSess.filter(x=>x.clientId===cl.id&&x.status==="done").length,0);
+  const totalSessTarget=myPTClients.reduce((s,cl)=>s+Number(cl.totalSessions||0),0);
+  const ptRate=totalSessTarget>0?Math.round(doneSessTotal/totalSessTarget*100):0;
+
+  // Sessions today (clients who have a done session today or are scheduled)
+  const todayPTClients=myPTClients.filter(cl=>ptSess.find(s=>s.clientId===cl.id&&s.date===today()&&s.status==="done"));
+
+  // Weekly PT: sessions done this week
+  const weekSessDone=myPTClients.reduce((s,cl)=>s+ptSess.filter(x=>x.clientId===cl.id&&weekDays.includes(x.date)&&x.status==="done").length,0);
+  const weekSessTarget=myPTClients.length*5; // 5 sessions/client/week target
+
+  // ── Performance score
+  const perfScore=Math.round((rate*0.6)+(ptRate*0.4));
+
+  // ── Advance request
+  const doAdvanceRequest=async()=>{
+    if(!advanceForm.amount||!advanceForm.reason){showToast("Fill amount and reason");return;}
+    const req={id:"adv_"+Date.now(),empId:emp.id,empName:emp.name,amount:advanceForm.amount,reason:advanceForm.reason,status:"pending",submittedAt:new Date().toISOString()};
+    if(window._saveAdvanceRequest) await window._saveAdvanceRequest(req.id,req,gymId||'gym_default');
+    showToast("✓ Advance request sent to owner!");
+    setShowAdvance(false);setAdvanceForm({amount:"",reason:""});
+  };
+
   const STATUS_COLOR={Present:"#00ff87",Absent:"#ff4d6d","Half Day":"#ffd60a",Leave:"#a78bfa"};
+  const MONTH_NAMES=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
   return(
     <div>
       {/* Header */}
-      <div style={{marginBottom:20}}>
+      <div style={{marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
           <div style={{width:48,height:48,borderRadius:10,background:"rgba(167,139,250,0.15)",border:"1.5px solid rgba(167,139,250,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700,color:"#a78bfa",flexShrink:0}}>{emp.avatar||makeAvatar(emp.name)}</div>
           <div style={{flex:1}}>
@@ -2843,75 +2971,203 @@ function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove,
       <LiveClock/>
 
       {/* Sub tabs */}
-      <div className="tabs-bar" style={{marginBottom:20}}>
-        {[["dashboard","Dashboard"],["myattend","My Attendance"],["pt","💪 My Clients"],["leave","Leave"]].map(([id,lbl])=>(
+      <div className="tabs-bar" style={{marginBottom:16}}>
+        {[["dashboard","Dashboard"],["myattend","My Attendance"],["pt","💪 My Clients"],["leave","Leave"],["salary","💰 Salary"]].map(([id,lbl])=>(
           <button key={id} className={`tab-btn${portalTab===id?" active":""}`} onClick={()=>setPortalTab(id)}>{lbl}</button>
         ))}
       </div>
 
-      {/* DASHBOARD */}
+      {/* ── DASHBOARD ── */}
       {portalTab==="dashboard"&&(
         <div>
-          {/* Today punch */}
-          <div style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"18px",marginBottom:16}}>
-            <div style={{fontSize:11,color:"#4b5563",letterSpacing:2,fontFamily:"'Barlow',sans-serif",marginBottom:12}}>TODAY — {fmtDate(today())}</div>
-            {/* Status badge */}
-            {todayStatus&&<div style={{marginBottom:12,display:"inline-block",background:`${STATUS_COLOR[todayStatus]}15`,border:`1px solid ${STATUS_COLOR[todayStatus]}`,borderRadius:6,padding:"4px 14px",fontSize:12,color:STATUS_COLOR[todayStatus],fontWeight:700,letterSpacing:1}}>{todayStatus.toUpperCase()}</div>}
-            {/* Mark Present / Absent buttons */}
-            <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
-              <button onClick={()=>doMarkStatus("Present")} style={{cursor:"pointer",flex:1,background:todayStatus==="Present"?"rgba(0,255,135,0.2)":"rgba(0,255,135,0.07)",border:`1.5px solid ${todayStatus==="Present"?"#00ff87":"rgba(0,255,135,0.25)"}`,borderRadius:8,padding:"10px 0",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:13,color:"#00ff87",letterSpacing:1,transition:"all 0.15s"}}>
-                ✅ PRESENT
-              </button>
-              <button onClick={()=>doMarkStatus("Absent")} style={{cursor:"pointer",flex:1,background:todayStatus==="Absent"?"rgba(255,77,109,0.2)":"rgba(255,77,109,0.07)",border:`1.5px solid ${todayStatus==="Absent"?"#ff4d6d":"rgba(255,77,109,0.25)"}`,borderRadius:8,padding:"10px 0",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:13,color:"#ff4d6d",letterSpacing:1,transition:"all 0.15s"}}>
-                ❌ ABSENT
-              </button>
+
+          {/* Shift Reminder Banner */}
+          {shiftReminder&&<div style={{background:"rgba(255,140,0,0.1)",border:"1.5px solid rgba(255,140,0,0.3)",borderRadius:10,padding:"10px 16px",marginBottom:12,fontSize:13,color:"#ff8c00",fontFamily:"'Barlow',sans-serif",fontWeight:600}}>{shiftReminder}</div>}
+
+          {/* Announcements Banner */}
+          {announcements.length>0&&<div style={{background:"rgba(96,165,250,0.08)",border:"1.5px solid rgba(96,165,250,0.25)",borderRadius:10,padding:"10px 16px",marginBottom:12}}>
+            <div style={{fontSize:10,letterSpacing:2,color:"#60a5fa",fontWeight:700,marginBottom:6}}>📢 ANNOUNCEMENTS</div>
+            {announcements.slice(0,3).map((a,i)=>(
+              <div key={i} style={{fontSize:12,color:"#e8edf2",fontFamily:"'Barlow',sans-serif",marginBottom:i<announcements.slice(0,3).length-1?6:0,paddingBottom:i<announcements.slice(0,3).length-1?6:0,borderBottom:i<announcements.slice(0,3).length-1?"1px solid rgba(96,165,250,0.1)":"none"}}>
+                <span style={{color:"#60a5fa"}}>•</span> {a.message}
+                <span style={{fontSize:10,color:"#4b5563",marginLeft:6}}>{a.date||""}</span>
+              </div>
+            ))}
+          </div>}
+
+          {/* Today Card */}
+          <div style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"16px",marginBottom:12}}>
+            <div style={{fontSize:11,color:"#4b5563",letterSpacing:2,fontFamily:"'Barlow',sans-serif",marginBottom:10}}>TODAY — {fmtDate(today())}</div>
+            {todayStatus&&<div style={{marginBottom:10,display:"inline-block",background:`${STATUS_COLOR[todayStatus]}15`,border:`1px solid ${STATUS_COLOR[todayStatus]}`,borderRadius:6,padding:"3px 12px",fontSize:11,color:STATUS_COLOR[todayStatus],fontWeight:700,letterSpacing:1}}>{todayStatus.toUpperCase()}</div>}
+            {isLatePunchIn()&&<div style={{display:"inline-block",marginLeft:8,marginBottom:10,background:"rgba(255,140,0,0.12)",border:"1px solid rgba(255,140,0,0.3)",borderRadius:6,padding:"3px 10px",fontSize:11,color:"#ff8c00",fontWeight:700}}>⚠ LATE IN</div>}
+            <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+              <button onClick={()=>doMarkStatus("Present")} style={{cursor:"pointer",flex:1,background:todayStatus==="Present"?"rgba(0,255,135,0.2)":"rgba(0,255,135,0.07)",border:`1.5px solid ${todayStatus==="Present"?"#00ff87":"rgba(0,255,135,0.25)"}`,borderRadius:8,padding:"9px 0",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:13,color:"#00ff87",letterSpacing:1}}>✅ PRESENT</button>
+              <button onClick={()=>doMarkStatus("Absent")} style={{cursor:"pointer",flex:1,background:todayStatus==="Absent"?"rgba(255,77,109,0.2)":"rgba(255,77,109,0.07)",border:`1.5px solid ${todayStatus==="Absent"?"#ff4d6d":"rgba(255,77,109,0.25)"}`,borderRadius:8,padding:"9px 0",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:13,color:"#ff4d6d",letterSpacing:1}}>❌ ABSENT</button>
             </div>
-            {/* Punch In / Out */}
             <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
               {!punchIn
-                ?<button className="punch-in-btn" style={{fontSize:13,padding:"10px 20px"}} onClick={doPunchIn}>🟢 PUNCH IN</button>
-                :<span className="punch-active" style={{fontSize:12,padding:"8px 14px"}}>🟢 IN: {punchIn}</span>
+                ?<button className="punch-in-btn" style={{fontSize:13,padding:"9px 18px"}} onClick={doPunchIn}>🟢 PUNCH IN</button>
+                :<span className="punch-active" style={{fontSize:12,padding:"7px 12px"}}>🟢 IN: {punchIn}</span>
               }
               {punchIn&&!punchOut
-                ?<button className="punch-out-btn" style={{fontSize:13,padding:"10px 20px"}} onClick={doPunchOut}>🔴 PUNCH OUT</button>
+                ?<button className="punch-out-btn" style={{fontSize:13,padding:"9px 18px"}} onClick={doPunchOut}>🔴 PUNCH OUT</button>
                 :punchIn&&punchOut
-                ?<span style={{fontSize:12,color:"#ff4d6d",background:"rgba(255,77,109,0.08)",border:"1px solid rgba(255,77,109,0.2)",borderRadius:4,padding:"8px 14px"}}>🔴 OUT: {punchOut}</span>
+                ?<span style={{fontSize:12,color:"#ff4d6d",background:"rgba(255,77,109,0.08)",border:"1px solid rgba(255,77,109,0.2)",borderRadius:4,padding:"7px 12px"}}>🔴 OUT: {punchOut}</span>
                 :null
               }
               {punchIn&&!punchOut&&<DurationTicker punchIn={punchIn}/>}
             </div>
           </div>
 
-          {/* Stats */}
-          <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
-            {[["Present",present,"#00ff87"],["Absent",absent,"#ff4d6d"],["Leave",leave,"#a78bfa"],["Attend %",rate+"%","#ff8c00"]].map(([l,v,c])=>(
+          {/* Weekly Strip */}
+          <div style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"14px 16px",marginBottom:12}}>
+            <div style={{fontSize:10,color:"#4b5563",letterSpacing:2,fontFamily:"'Barlow',sans-serif",marginBottom:10}}>THIS WEEK</div>
+            <div style={{display:"flex",gap:6,justifyContent:"space-between"}}>
+              {weekDays.map((d,i)=>{
+                const data=allData[d]||(d===today()?dayData:null);
+                const s=(data?.statuses||{})[emp.id];
+                const isToday=d===today();
+                const isFuture=d>today();
+                const col=s?STATUS_COLOR[s]:isFuture?"#1f2937":"#374151";
+                return(
+                  <div key={d} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                    <div style={{fontSize:9,color:isToday?"#ff4d00":"#4b5563",fontWeight:isToday?700:400,fontFamily:"'Barlow',sans-serif"}}>{DAY_LABELS[i]}</div>
+                    <div style={{width:28,height:28,borderRadius:7,background:s?`${col}20`:"rgba(255,255,255,0.03)",border:`1.5px solid ${s?col:isToday?"rgba(255,77,0,0.4)":"rgba(255,255,255,0.06)"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:s?col:isFuture?"#1f2937":"#374151"}}>
+                      {s?s[0]:(isToday?"·":"–")}
+                    </div>
+                    <div style={{fontSize:8,color:"#374151",fontFamily:"'Barlow',sans-serif"}}>{new Date(d+"T00:00:00").getDate()}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Stats Grid */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}}>
+            {[["Present",present,"#00ff87"],["Absent",absent,"#ff4d6d"],["Leave",leave,"#a78bfa"],["Attend %",rate+"%","#ff8c00"]].map(([l,v,col])=>(
               <div key={l} className="portal-stat">
-                <div style={{fontSize:22,fontWeight:900,color:c,lineHeight:1}}>{v}</div>
+                <div style={{fontSize:20,fontWeight:900,color:col,lineHeight:1}}>{v}</div>
                 <div style={{fontSize:9,color:"#4b5563",letterSpacing:1,fontFamily:"'Barlow',sans-serif",marginTop:3}}>{l}</div>
               </div>
             ))}
           </div>
-          {totalMins>0&&<div style={{background:"rgba(255,214,10,0.06)",border:"1px solid rgba(255,214,10,0.15)",borderRadius:8,padding:"10px 16px",fontSize:13,color:"#ffd60a",fontFamily:"'Barlow',sans-serif",marginBottom:12}}>⏱ Total hours logged: <strong>{Math.floor(totalMins/60)}h {totalMins%60}m</strong></div>}
-          {/* PT Client Summary */}
-          {(()=>{
-            const myPTClients=(ptClients||[]).filter(cl=>cl.trainerId===emp.id);
-            if(!myPTClients.length)return null;
-            const ptSess=ptSessions||[];
-            const activePT=myPTClients.filter(cl=>ptSess.filter(s=>s.clientId===cl.id&&s.status==="done").length<Number(cl.totalSessions||0)).length;
-            const feePending=myPTClients.filter(cl=>!cl.feePaid).length;
-            return(<div onClick={()=>setPortalTab("pt")} style={{cursor:"pointer",background:"rgba(167,139,250,0.06)",border:"1px solid rgba(167,139,250,0.2)",borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",gap:14,transition:"border-color 0.2s"}} className="pt-client-card">
-              <div style={{fontSize:28}}>💪</div>
-              <div style={{flex:1}}>
-                <div style={{fontSize:14,fontWeight:700,color:"#a78bfa"}}>My PT Clients</div>
-                <div style={{fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginTop:2}}>{myPTClients.length} total · {activePT} active{feePending>0?" · "+feePending+" fee due":""}</div>
+
+          {/* Hours & Avg */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+            <div style={{background:"rgba(255,214,10,0.06)",border:"1px solid rgba(255,214,10,0.15)",borderRadius:10,padding:"12px 14px"}}>
+              <div style={{fontSize:10,color:"#4b5563",letterSpacing:1,fontFamily:"'Barlow',sans-serif",marginBottom:4}}>THIS MONTH HRS</div>
+              <div style={{fontSize:18,fontWeight:900,color:"#ffd60a"}}>{Math.floor(monthMins/60)}h {monthMins%60}m</div>
+              <div style={{fontSize:9,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginTop:2}}>{monthPresent} days present</div>
+            </div>
+            <div style={{background:"rgba(255,214,10,0.06)",border:"1px solid rgba(255,214,10,0.15)",borderRadius:10,padding:"12px 14px"}}>
+              <div style={{fontSize:10,color:"#4b5563",letterSpacing:1,fontFamily:"'Barlow',sans-serif",marginBottom:4}}>AVG SHIFT</div>
+              <div style={{fontSize:18,fontWeight:900,color:"#ffd60a"}}>{present>0?`${Math.floor(avgMins/60)}h ${avgMins%60}m`:"—"}</div>
+              <div style={{fontSize:9,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginTop:2}}>per day</div>
+            </div>
+          </div>
+
+          {/* Performance Score */}
+          <div style={{background:"rgba(255,77,0,0.06)",border:"1px solid rgba(255,77,0,0.2)",borderRadius:10,padding:"12px 16px",marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <div style={{fontSize:11,letterSpacing:2,color:"#ff4d00",fontWeight:700}}>⭐ PERFORMANCE SCORE</div>
+              <div style={{fontSize:22,fontWeight:900,color:perfScore>=80?"#00ff87":perfScore>=60?"#ffd60a":"#ff4d6d"}}>{perfScore}%</div>
+            </div>
+            <div style={{background:"rgba(255,255,255,0.05)",borderRadius:4,height:6,overflow:"hidden"}}>
+              <div style={{height:"100%",width:perfScore+"%",background:perfScore>=80?"linear-gradient(90deg,#00ff87,#00cc66)":perfScore>=60?"linear-gradient(90deg,#ffd60a,#ff8c00)":"linear-gradient(90deg,#ff4d6d,#ff1a1a)",borderRadius:4,transition:"width 0.5s ease"}}/>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginTop:6}}>
+              <div style={{fontSize:10,color:"#4b5563",fontFamily:"'Barlow',sans-serif"}}>Attendance: {rate}%</div>
+              {myPTClients.length>0&&<div style={{fontSize:10,color:"#4b5563",fontFamily:"'Barlow',sans-serif"}}>PT Completion: {ptRate}%</div>}
+            </div>
+          </div>
+
+          {/* Leave Balance & Upcoming */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+            <div style={{background:"rgba(167,139,250,0.06)",border:"1px solid rgba(167,139,250,0.18)",borderRadius:10,padding:"12px 14px"}}>
+              <div style={{fontSize:10,color:"#4b5563",letterSpacing:1,fontFamily:"'Barlow',sans-serif",marginBottom:4}}>LEAVE BALANCE</div>
+              <div style={{fontSize:22,fontWeight:900,color:"#a78bfa"}}>{leaveBalance}/{LEAVE_LIMIT}</div>
+              <div style={{fontSize:9,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginTop:2}}>this month</div>
+            </div>
+            <div style={{background:"rgba(167,139,250,0.06)",border:"1px solid rgba(167,139,250,0.18)",borderRadius:10,padding:"12px 14px"}}>
+              <div style={{fontSize:10,color:"#4b5563",letterSpacing:1,fontFamily:"'Barlow',sans-serif",marginBottom:4}}>UPCOMING LEAVE</div>
+              {upcomingLeaves.length>0
+                ?<div style={{fontSize:12,color:"#a78bfa",fontFamily:"'Barlow',sans-serif",fontWeight:600}}>{(upcomingLeaves[0].dates||[]).filter(d=>d>=today()).length} day{(upcomingLeaves[0].dates||[]).filter(d=>d>=today()).length>1?"s":""} approved</div>
+                :<div style={{fontSize:12,color:"#374151",fontFamily:"'Barlow',sans-serif"}}>None</div>
+              }
+            </div>
+          </div>
+
+          {/* PT Summary */}
+          {myPTClients.length>0&&(
+            <div>
+              {/* Sessions Today */}
+              {todayPTClients.length>0&&(
+                <div style={{background:"rgba(167,139,250,0.06)",border:"1px solid rgba(167,139,250,0.2)",borderRadius:10,padding:"12px 16px",marginBottom:8}}>
+                  <div style={{fontSize:10,letterSpacing:2,color:"#a78bfa",fontWeight:700,marginBottom:8}}>💪 SESSIONS TODAY</div>
+                  {todayPTClients.map(cl=>(
+                    <div key={cl.id} style={{fontSize:13,color:"#e8edf2",fontFamily:"'Barlow',sans-serif",display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                      <span style={{color:"#00ff87"}}>✓</span>{cl.name}
+                      {cl.goal&&<span style={{fontSize:10,color:"#4b5563"}}>· {cl.goal}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Weekly PT Target */}
+              <div style={{background:"rgba(167,139,250,0.06)",border:"1px solid rgba(167,139,250,0.2)",borderRadius:10,padding:"12px 16px",marginBottom:8}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <div style={{fontSize:10,letterSpacing:2,color:"#a78bfa",fontWeight:700}}>WEEKLY PT TARGET</div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#a78bfa"}}>{weekSessDone}/{weekSessTarget} sessions</div>
+                </div>
+                <div style={{background:"rgba(255,255,255,0.05)",borderRadius:4,height:6,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:Math.min(100,weekSessTarget>0?weekSessDone/weekSessTarget*100:0)+"%",background:"linear-gradient(90deg,#a78bfa,#7c3aed)",borderRadius:4}}/>
+                </div>
               </div>
-              <div style={{color:"#a78bfa",fontSize:18}}>›</div>
-            </div>);
-          })()}
+
+              {/* PT Client card */}
+              <div onClick={()=>setPortalTab("pt")} style={{cursor:"pointer",background:"rgba(167,139,250,0.06)",border:"1px solid rgba(167,139,250,0.2)",borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",gap:14,marginBottom:8}}>
+                <div style={{fontSize:28}}>💪</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,fontWeight:700,color:"#a78bfa"}}>My PT Clients</div>
+                  <div style={{fontSize:12,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginTop:2}}>{myPTClients.length} total · {doneSessTotal}/{totalSessTarget} sessions done</div>
+                </div>
+                <div style={{color:"#a78bfa",fontSize:18}}>›</div>
+              </div>
+            </div>
+          )}
+
+          {/* Quick Message to Owner */}
+          {gymConfig?.ownerPhone&&(
+            <button onClick={()=>openWA(gymConfig.ownerPhone,"Hi! This is "+emp.name+" from Surya Gym 2.0.")} style={{cursor:"pointer",width:"100%",background:"rgba(37,211,102,0.07)",border:"1.5px solid rgba(37,211,102,0.2)",borderRadius:10,padding:"11px 16px",display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
+              <span style={{fontSize:20}}>💬</span>
+              <div style={{flex:1,textAlign:"left"}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#25d366",fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1}}>MESSAGE OWNER</div>
+                <div style={{fontSize:11,color:"#4b5563",fontFamily:"'Barlow',sans-serif"}}>Send a quick WhatsApp to {gymConfig.ownerName||"the owner"}</div>
+              </div>
+              <span style={{color:"#25d366",fontSize:16}}>›</span>
+            </button>
+          )}
+
+          {/* Advance Request */}
+          <button onClick={()=>setShowAdvance(!showAdvance)} style={{cursor:"pointer",width:"100%",background:"rgba(255,140,0,0.07)",border:"1.5px solid rgba(255,140,0,0.2)",borderRadius:10,padding:"11px 16px",display:"flex",alignItems:"center",gap:12,marginBottom:showAdvance?0:0}}>
+            <span style={{fontSize:20}}>💵</span>
+            <div style={{flex:1,textAlign:"left"}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#ff8c00",fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1}}>REQUEST SALARY ADVANCE</div>
+              <div style={{fontSize:11,color:"#4b5563",fontFamily:"'Barlow',sans-serif"}}>Send advance request to owner</div>
+            </div>
+            <span style={{color:"#ff8c00",fontSize:16}}>{showAdvance?"▲":"›"}</span>
+          </button>
+          {showAdvance&&(
+            <div style={{background:"rgba(255,140,0,0.05)",border:"1.5px solid rgba(255,140,0,0.15)",borderTopLeftRadius:0,borderTopRightRadius:0,borderRadius:10,padding:"14px 16px",marginBottom:8}}>
+              <input type="number" placeholder="Amount (₹)" value={advanceForm.amount} onChange={e=>setAdvanceForm(p=>({...p,amount:e.target.value}))} style={{marginBottom:8,fontFamily:"'Barlow',sans-serif"}}/>
+              <input type="text" placeholder="Reason (e.g. medical emergency)" value={advanceForm.reason} onChange={e=>setAdvanceForm(p=>({...p,reason:e.target.value}))} style={{marginBottom:8,fontFamily:"'Barlow',sans-serif"}}/>
+              <button onClick={doAdvanceRequest} className="save-btn" style={{width:"100%",background:"linear-gradient(135deg,#ff8c00,#ff4d00)"}}>SEND REQUEST</button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* MY ATTENDANCE */}
+      {/* ── MY ATTENDANCE ── */}
       {portalTab==="myattend"&&(
         <div>
           {loadingData
@@ -2924,12 +3180,13 @@ function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove,
               const pin2=(data?.punchIn||{})[emp.id];
               const pout2=(data?.punchOut||{})[emp.id];
               const col=s?STATUS_COLOR[s]:"#374151";
+              const durMins=(pin2&&pout2)?toMins(pout2)-toMins(pin2):0;
               return(
                 <div key={d} style={{background:"rgba(255,255,255,0.025)",border:`1px solid ${col}25`,borderRadius:10,padding:"12px 16px",marginBottom:8,animation:"slide-in 0.3s ease both",animationDelay:`${i*0.04}s`}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                     <div>
                       <div style={{fontSize:14,fontWeight:700}}>{fmtDate(d)}</div>
-                      {pin2&&<div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginTop:2}}>In: {pin2}{pout2?" · Out: "+pout2:""}</div>}
+                      {pin2&&<div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginTop:2}}>In: {pin2}{pout2?" · Out: "+pout2:""}{durMins>0?" · "+Math.floor(durMins/60)+"h "+durMins%60+"m":""}</div>}
                     </div>
                     {s?<span style={{background:`${col}15`,border:`1px solid ${col}`,borderRadius:5,padding:"3px 10px",fontSize:11,color:col,fontWeight:700,letterSpacing:1}}>{s.toUpperCase()}</span>
                       :<span style={{color:"#374151",fontSize:11,fontFamily:"'Barlow',sans-serif"}}>Not marked</span>}
@@ -2941,13 +3198,13 @@ function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove,
         </div>
       )}
 
-      {/* MY PT CLIENTS */}
+      {/* ── PT CLIENTS ── */}
       {portalTab==="pt"&&(()=>{
         const myClients=(ptClients||[]).filter(cl=>cl.trainerId===emp.id);
-        const ptSess=ptSessions||[];
-        const doneSess=(cid)=>ptSess.filter(s=>s.clientId===cid&&s.status==="done").length;
-        const missedSess=(cid)=>ptSess.filter(s=>s.clientId===cid&&s.status==="missed").length;
-        const getStatus=(cid,dt)=>(ptSess.find(s=>s.clientId===cid&&s.date===dt)||{}).status||"";
+        const ptSessL=ptSessions||[];
+        const doneSess=(cid)=>ptSessL.filter(s=>s.clientId===cid&&s.status==="done").length;
+        const missedSess=(cid)=>ptSessL.filter(s=>s.clientId===cid&&s.status==="missed").length;
+        const getStatus=(cid,dt)=>(ptSessL.find(s=>s.clientId===cid&&s.date===dt)||{}).status||"";
         const toggleSess=async(cid,dt,cur)=>{
           const id="pts_"+cid+"_"+dt;
           const next=cur==="done"?"missed":cur==="missed"?"":"done";
@@ -3002,13 +3259,117 @@ function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove,
         </div>);
       })()}
 
-      {/* LEAVE */}
+      {/* ── LEAVE ── */}
       {portalTab==="leave"&&(
         <LeaveTab staff={staff} leaveReqs={myLeaves} showToast={showToast}
           onApprove={onApprove} onReject={onReject}
           restrictToEmp={emp.id}
         />
       )}
+
+      {/* ── SALARY TAB ── */}
+      {portalTab==="salary"&&(
+        <div>
+          {/* Current Month Salary Card */}
+          <div style={{background:"linear-gradient(135deg,rgba(255,140,0,0.1),rgba(255,77,0,0.06))",border:"1.5px solid rgba(255,140,0,0.25)",borderRadius:14,padding:"20px",marginBottom:14}}>
+            <div style={{fontSize:11,letterSpacing:2,color:"#ff8c00",fontWeight:700,marginBottom:4}}>💰 THIS MONTH SALARY</div>
+            <div style={{fontSize:11,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginBottom:14}}>{new Date().toLocaleString("en-IN",{month:"long",year:"numeric"})}</div>
+            {monthlySalary>0?(
+              <div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
+                  {[["Base","₹"+monthlySalary.toLocaleString("en-IN"),"#e8edf2"],["Deduction","-₹"+deduction.toLocaleString("en-IN"),"#ff4d6d"],["Net Pay","₹"+netSalary.toLocaleString("en-IN"),"#00ff87"]].map(([l,v,col])=>(
+                    <div key={l} style={{background:"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
+                      <div style={{fontSize:14,fontWeight:900,color:col}}>{v}</div>
+                      <div style={{fontSize:9,color:"#4b5563",letterSpacing:1,fontFamily:"'Barlow',sans-serif",marginTop:3}}>{l}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginBottom:8}}>{monthAbsent} absent day{monthAbsent!==1?"s":""} × ₹{Math.round(perDay).toLocaleString("en-IN")}/day deducted</div>
+                <div style={{display:"inline-block",background:payrollStatus==="paid"?"rgba(0,255,135,0.12)":"rgba(255,214,10,0.1)",border:`1px solid ${payrollStatus==="paid"?"#00ff87":"#ffd60a"}`,borderRadius:6,padding:"4px 14px",fontSize:12,color:payrollStatus==="paid"?"#00ff87":"#ffd60a",fontWeight:700,letterSpacing:1}}>
+                  {payrollStatus==="paid"?"✅ PAID":"⏳ PENDING"}
+                </div>
+              </div>
+            ):<div style={{textAlign:"center",color:"#4b5563",fontSize:13,fontFamily:"'Barlow',sans-serif",padding:"10px 0"}}>Salary not configured — ask owner to set up payroll</div>}
+          </div>
+
+          {/* Salary History */}
+          <div style={{fontSize:11,letterSpacing:2,color:"#ff8c00",fontWeight:700,marginBottom:10}}>SALARY HISTORY</div>
+          {[0,1,2].map(i=>{
+            const d=new Date(now2.getFullYear(),now2.getMonth()-i,1);
+            const mk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+            const pd=payrollData[mk];
+            const status=pd?.[emp.id]?.status||"pending";
+            const lbl=d.toLocaleString("en-IN",{month:"long",year:"numeric"});
+            return(
+              <div key={mk} style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:10,padding:"12px 16px",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:700}}>{lbl}</div>
+                  {monthlySalary>0&&<div style={{fontSize:11,color:"#6b7280",fontFamily:"'Barlow',sans-serif",marginTop:2}}>₹{monthlySalary.toLocaleString("en-IN")} base</div>}
+                </div>
+                <span style={{background:status==="paid"?"rgba(0,255,135,0.12)":"rgba(255,214,10,0.1)",border:`1px solid ${status==="paid"?"#00ff87":"#ffd60a"}`,borderRadius:5,padding:"3px 10px",fontSize:11,color:status==="paid"?"#00ff87":"#ffd60a",fontWeight:700,letterSpacing:1}}>
+                  {status==="paid"?"PAID":"PENDING"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+/* ── ANNOUNCEMENTS TAB ── */
+function AnnouncementsTab({gymId, staff, showToast}){
+  const [announcements, setAnnouncements] = useState([]);
+  const [msg, setMsg] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(()=>{
+    if(!window._listenAnnouncements) return;
+    const unsub=window._listenAnnouncements(gymId||'gym_default',data=>setAnnouncements(data||[]));
+    return ()=>unsub&&unsub();
+  },[gymId]);
+
+  const sendAnnouncement = async () => {
+    if(!msg.trim()){showToast("Type a message first!");return;}
+    setSaving(true);
+    const id="ann_"+Date.now();
+    const ann={id,message:msg.trim(),date:today(),createdAt:new Date().toISOString()};
+    await window._saveAnnouncement(id,ann,gymId||'gym_default');
+    setMsg("");setSaving(false);
+    showToast("✓ Announcement sent to all staff!");
+  };
+
+  const sendToAllStaff = () => {
+    const withPhone=staff.filter(e=>e.phone&&e.phone.length>=10);
+    if(!msg.trim()){showToast("Type a message first!");return;}
+    withPhone.forEach(e=>openWA(e.phone,"📢 Surya Gym 2.0 Announcement:\n\n"+msg.trim()+"\n\nFrom: Management"));
+  };
+
+  return(
+    <div>
+      <div style={{fontSize:11,letterSpacing:3,color:"#60a5fa",fontWeight:700,marginBottom:16}}>📢 STAFF ANNOUNCEMENTS</div>
+      <div style={{background:"rgba(96,165,250,0.06)",border:"1.5px solid rgba(96,165,250,0.2)",borderRadius:12,padding:"16px",marginBottom:16}}>
+        <div className="field-label" style={{marginBottom:8}}>New Announcement</div>
+        <textarea value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Type your announcement here..." rows={3} style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,color:"#e8edf2",fontFamily:"'Barlow',sans-serif",fontSize:13,padding:"10px 12px",outline:"none",resize:"vertical",marginBottom:10}}/>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={sendAnnouncement} disabled={saving} className="save-btn" style={{flex:1}}>
+            {saving?"Sending...":"📢 POST TO APP"}
+          </button>
+          <button onClick={sendToAllStaff} className="wa-btn" style={{flex:1,padding:"10px 0",fontSize:12}}>
+            💬 WHATSAPP ALL
+          </button>
+        </div>
+      </div>
+      <div style={{fontSize:11,letterSpacing:2,color:"#4b5563",fontWeight:700,marginBottom:10}}>RECENT ANNOUNCEMENTS</div>
+      {announcements.length===0&&<div className="empty"><div style={{fontSize:36,marginBottom:10}}>📢</div><div style={{fontSize:14,letterSpacing:2}}>NO ANNOUNCEMENTS YET</div></div>}
+      {announcements.map((a,i)=>(
+        <div key={a.id||i} style={{background:"rgba(96,165,250,0.05)",border:"1px solid rgba(96,165,250,0.15)",borderRadius:10,padding:"12px 16px",marginBottom:8,animation:"slide-in 0.3s ease both",animationDelay:i*0.04+"s"}}>
+          <div style={{fontSize:13,color:"#e8edf2",fontFamily:"'Barlow',sans-serif",marginBottom:6}}>{a.message}</div>
+          <div style={{fontSize:10,color:"#4b5563",fontFamily:"'Barlow',sans-serif"}}>{fmtDate(a.date||"")} · {a.createdAt?new Date(a.createdAt).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}):""}</div>
+        </div>
+      ))}
     </div>
   );
 }
