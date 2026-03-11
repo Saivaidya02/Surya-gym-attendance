@@ -2792,6 +2792,16 @@ function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove,
     showToast("✓ Punched out at "+t);
   };
 
+  const doMarkStatus = async (status) => {
+    const updated = {
+      ...(dayData||{}),
+      statuses:{...(dayData?.statuses||{}),[emp.id]:status},
+      shifts:{...(dayData?.shifts||{}),[emp.id]:emp.shift},
+    };
+    await window._saveAttendance(today(), updated, gymId||'gym_default');
+    showToast("✓ Marked as "+status);
+  };
+
   // Stats
   let present=0,absent=0,halfDay=0,leave=0,totalMins=0;
   Object.values(allData).forEach(data=>{
@@ -2845,7 +2855,18 @@ function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove,
           {/* Today punch */}
           <div style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"18px",marginBottom:16}}>
             <div style={{fontSize:11,color:"#4b5563",letterSpacing:2,fontFamily:"'Barlow',sans-serif",marginBottom:12}}>TODAY — {fmtDate(today())}</div>
+            {/* Status badge */}
             {todayStatus&&<div style={{marginBottom:12,display:"inline-block",background:`${STATUS_COLOR[todayStatus]}15`,border:`1px solid ${STATUS_COLOR[todayStatus]}`,borderRadius:6,padding:"4px 14px",fontSize:12,color:STATUS_COLOR[todayStatus],fontWeight:700,letterSpacing:1}}>{todayStatus.toUpperCase()}</div>}
+            {/* Mark Present / Absent buttons */}
+            <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+              <button onClick={()=>doMarkStatus("Present")} style={{cursor:"pointer",flex:1,background:todayStatus==="Present"?"rgba(0,255,135,0.2)":"rgba(0,255,135,0.07)",border:`1.5px solid ${todayStatus==="Present"?"#00ff87":"rgba(0,255,135,0.25)"}`,borderRadius:8,padding:"10px 0",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:13,color:"#00ff87",letterSpacing:1,transition:"all 0.15s"}}>
+                ✅ PRESENT
+              </button>
+              <button onClick={()=>doMarkStatus("Absent")} style={{cursor:"pointer",flex:1,background:todayStatus==="Absent"?"rgba(255,77,109,0.2)":"rgba(255,77,109,0.07)",border:`1.5px solid ${todayStatus==="Absent"?"#ff4d6d":"rgba(255,77,109,0.25)"}`,borderRadius:8,padding:"10px 0",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:13,color:"#ff4d6d",letterSpacing:1,transition:"all 0.15s"}}>
+                ❌ ABSENT
+              </button>
+            </div>
+            {/* Punch In / Out */}
             <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
               {!punchIn
                 ?<button className="punch-in-btn" style={{fontSize:13,padding:"10px 20px"}} onClick={doPunchIn}>🟢 PUNCH IN</button>
