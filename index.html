@@ -2780,7 +2780,7 @@ function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove,
     if(punchIn) return;
     const t = nowTimeShort();
     const updated = {...(dayData||{}), punchIn:{...(dayData?.punchIn||{}),[emp.id]:t}, statuses:{...(dayData?.statuses||{}),[emp.id]:"Present"}};
-    await window._saveAttendance(today(), updated);
+    await window._saveAttendance(today(), updated, gymId||'gym_default');
     showToast("✓ Punched in at "+t);
   };
 
@@ -2788,7 +2788,7 @@ function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove,
     if(!punchIn||punchOut) return;
     const t = nowTimeShort();
     const updated = {...dayData, punchOut:{...(dayData?.punchOut||{}),[emp.id]:t}};
-    await window._saveAttendance(today(), updated);
+    await window._saveAttendance(today(), updated, gymId||'gym_default');
     showToast("✓ Punched out at "+t);
   };
 
