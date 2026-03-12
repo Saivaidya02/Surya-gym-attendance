@@ -378,6 +378,14 @@ function openWA(phone, msg){
   const num = "91"+String(phone).replace(/[^0-9]/g,"");
   window.open("https://wa.me/"+num+"?text="+encodeURIComponent(msg),"_blank");
 }
+
+// Send WhatsApp to owner silently (non-blocking, no popup if no number set)
+function notifyOwnerWA(gymConfig, msg){
+  const phone = gymConfig?.ownerPhone;
+  if(!phone||phone.length<10) return; // silently skip if not configured
+  const num = "91"+String(phone).replace(/[^0-9]/g,"");
+  window.open("https://wa.me/"+num+"?text="+encodeURIComponent(msg),"_blank");
+}
 function nowTime(){
   const n=new Date();
   return n.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:true});
@@ -744,12 +752,13 @@ function App(){
         </div>
         <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
           <span className="role-badge owner" style={{fontSize:10}}>👑 OWNER</span>
-          <button onClick={async()=>{
-            if(notifEnabled){showToast("🔔 Notifications already enabled!");return;}
-            const token=await window._requestNotificationPermission("owner",activeGymId);
-            if(token){setNotifEnabled(true);showToast("🔔 Notifications enabled!");}
-            else showToast("❌ Permission denied. Enable in phone settings.");
-          }} title="Enable Notifications" style={{cursor:"pointer",background:notifEnabled?"rgba(0,255,135,0.1)":"rgba(255,255,255,0.06)",border:"1px solid "+(notifEnabled?"rgba(0,255,135,0.4)":"rgba(255,255,255,0.15)"),borderRadius:7,padding:"6px 10px",color:notifEnabled?"#00ff87":"#6b7280",fontFamily:"'Barlow Condensed',sans-serif",fontSize:14,fontWeight:700}}>🔔</button>
+          <button onClick={()=>{
+            if(gymConfig?.ownerPhone){
+              openWA(gymConfig.ownerPhone,"🧪 Test - Surya Gym 2.0 WhatsApp notifications are working! ✅");
+            } else {
+              alert("Go to Revenue tab → WhatsApp Notifications to set your number first!");
+            }
+          }} title={gymConfig?.ownerPhone?"WhatsApp: +91"+gymConfig.ownerPhone:"Set WhatsApp number in Revenue tab"} style={{cursor:"pointer",background:gymConfig?.ownerPhone?"rgba(37,211,102,0.12)":"rgba(255,255,255,0.06)",border:"1px solid "+(gymConfig?.ownerPhone?"rgba(37,211,102,0.4)":"rgba(255,255,255,0.15)"),borderRadius:7,padding:"6px 10px",color:gymConfig?.ownerPhone?"#25d366":"#6b7280",fontFamily:"'Barlow Condensed',sans-serif",fontSize:14,fontWeight:700}}>📱</button>
           <button onClick={()=>setShowGymMgr(true)} title="Switch Location" style={{cursor:"pointer",background:"rgba(255,140,0,0.1)",border:"1px solid rgba(255,140,0,0.3)",borderRadius:7,padding:"6px 10px",color:"#ff8c00",fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:700,letterSpacing:1}}>🏛 GYMS</button>
           <button onClick={()=>setShowPwd(true)} style={{cursor:"pointer",background:"rgba(255,77,0,0.1)",border:"1px solid rgba(255,77,0,0.3)",borderRadius:7,padding:"6px 10px",color:"#ff4d00",fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:700,letterSpacing:1}}>✏️ STAFF</button>
           <button onClick={()=>setSession(null)} style={{cursor:"pointer",background:"rgba(255,77,109,0.08)",border:"1px solid rgba(255,77,109,0.25)",borderRadius:7,padding:"6px 10px",color:"#ff4d6d",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:11,letterSpacing:1}}>⏻</button>
@@ -935,7 +944,7 @@ function App(){
 
     {tab==="summary"&&<SummaryTab allDates={allDates} staff={staff} gymId={activeGymId}/>}
 
-    {tab==="leave"&&<LeaveTab staff={staff} leaveReqs={leaveReqs} showToast={showToast} gymId={activeGymId} onApprove={async(req)=>{
+    {tab==="leave"&&<LeaveTab staff={staff} leaveReqs={leaveReqs} showToast={showToast} gymId={activeGymId} gymConfig={gymConfig} onApprove={async(req)=>{
       const updated={...req,status:"approved",updatedAt:new Date().toISOString()};
       await window._saveLeaveReq(req.id,updated,activeGymId);
       // Auto update attendance for approved leave dates
@@ -1099,13 +1108,23 @@ function OwnerOverview({stats, staff, members, leaveReqs, ptClients, ptSessions,
 
       {/* Expiring soon alert */}
       {expiringCount>0&&(
-        <div onClick={()=>onNavigate("members")} style={{cursor:"pointer",background:"rgba(255,214,10,0.07)",border:"1.5px solid rgba(255,214,10,0.3)",borderRadius:10,padding:"12px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:12}}>
-          <span style={{fontSize:22}}>⚠️</span>
-          <div style={{flex:1}}>
-            <div style={{fontSize:13,fontWeight:700,color:"#ffd60a"}}>{expiringCount} member{expiringCount>1?"s":""} expiring within 7 days</div>
-            <div style={{fontSize:11,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginTop:2}}>Tap to send renewal reminders</div>
+        <div style={{background:"rgba(255,214,10,0.07)",border:"1.5px solid rgba(255,214,10,0.3)",borderRadius:10,padding:"12px 16px",marginBottom:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+            <span style={{fontSize:20}}>⚠️</span>
+            <div style={{flex:1,fontSize:13,fontWeight:700,color:"#ffd60a"}}>{expiringCount} member{expiringCount>1?"s":""} expiring within 7 days</div>
           </div>
-          <span style={{color:"#ffd60a"}}>›</span>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>onNavigate("members")} style={{cursor:"pointer",flex:1,background:"rgba(255,214,10,0.1)",border:"1px solid rgba(255,214,10,0.3)",borderRadius:8,padding:"8px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:11,color:"#ffd60a",letterSpacing:1}}>👁 VIEW</button>
+            <button onClick={()=>{
+              const expiring=members.filter(m=>memberStatus(m)==="expiring"&&m.phone);
+              if(!expiring.length){alert("No expiring members with phone numbers");return;}
+              expiring.forEach(m=>{
+                const dl=daysLeft(m.expiryDate);
+                const msg="Hi "+m.name+"!\n\n⚠️ Your Surya Gym 2.0 membership expires in "+dl+" day"+(dl!==1?"s":"")+"!\n\n📦 Package: "+m.package+"\n📅 Expiry: "+fmtDate(m.expiryDate)+"\n\nRenew now to continue your fitness journey! 💪\n\nSurya Gym 2.0";
+                openWA(m.phone,msg);
+              });
+            }} style={{cursor:"pointer",flex:2,background:"rgba(37,211,102,0.1)",border:"1px solid rgba(37,211,102,0.3)",borderRadius:8,padding:"8px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:11,color:"#25d366",letterSpacing:1}}>💬 REMIND ALL ON WHATSAPP</button>
+          </div>
         </div>
       )}
 
@@ -1652,7 +1671,7 @@ function PayrollTab({allDates,staff,salaryConfig,onSaveConfig,gymId}){
 }
 
 /* ── LEAVE TAB ── */
-function LeaveTab({staff,leaveReqs,showToast,onApprove,onReject,restrictToEmp,gymId}){
+function LeaveTab({staff,leaveReqs,showToast,onApprove,onReject,restrictToEmp,gymId,gymConfig}){
   const [subTab,setSubTab]=useState("requests"); // requests | apply
   const [empId,setEmpId]=useState(restrictToEmp||staff[0]?.id||"");
   const [leaveType,setLeaveType]=useState("Sick Leave");
@@ -1687,6 +1706,9 @@ function LeaveTab({staff,leaveReqs,showToast,onApprove,onReject,restrictToEmp,gy
     window._getOwnerTokens&&window._getOwnerTokens().then(tokens=>{
       window._sendPushNotification&&window._sendPushNotification(tokens,"🏖 Leave Request",empName+" applied for leave on "+fromDate+(fromDate!==toDate?" – "+toDate:""),"leave");
     }).catch(()=>{});
+    // WhatsApp owner notification
+    const leaveMsg="🏖 *Leave Request - Surya Gym 2.0*\n\n👤 Staff: "+empName+"\n📅 Date: "+fromDate+(fromDate!==toDate?" to "+toDate:"")+"\n📝 Reason: "+reason+"\n\nPlease approve or reject in the app.";
+    notifyOwnerWA(gymConfig||{}, leaveMsg);
     setReason("");setFromDate(today());setToDate(today());
     setSubmitting(false);
     setSubTab("requests");
@@ -1902,6 +1924,9 @@ function MembersTab({members, gymId, gymConfig, staff, memberAttend, date, showT
       window._getOwnerTokens&&window._getOwnerTokens().then(tokens=>{
         window._sendPushNotification&&window._sendPushNotification(tokens,"👤 New Member",data.name+" joined with "+data.package+" package","member");
       }).catch(()=>{});
+      // WhatsApp owner about new member
+      const memMsg="👤 *New Member Added - Surya Gym 2.0*\n\n🏃 Name: "+data.name+"\n📦 Package: "+data.package+"\n📅 Expiry: "+fmtDate(data.expiryDate)+"\n💰 Fee: ₹"+Number(data.feeAmount||0).toLocaleString("en-IN")+(data.feePaid?" (PAID)":" (PENDING)")+"\n\nMember added successfully!";
+      notifyOwnerWA(gymConfig||{}, memMsg);
     }
     showToast(editMode?"✓ Member updated!":"✓ Member added!");
     setSaving(false); resetForm(); setEditMode(false); setView("list");
@@ -2348,6 +2373,37 @@ function RevenueTab({members, gymConfig, gymId, gymName, onSaveGymConfig}){
         </div>
       )}
 
+      {/* ── OWNER WHATSAPP SETTINGS ── */}
+      {(()=>{
+        const [ownerForm, setOwnerForm] = React.useState({ownerPhone:gymConfig.ownerPhone||"",ownerName:gymConfig.ownerName||""});
+        const [savingOwner, setSavingOwner] = React.useState(false);
+        React.useEffect(()=>setOwnerForm({ownerPhone:gymConfig.ownerPhone||"",ownerName:gymConfig.ownerName||""}),[gymConfig]);
+        return(
+          <div style={{background:"rgba(37,211,102,0.05)",border:"1.5px solid rgba(37,211,102,0.2)",borderRadius:12,padding:"18px",marginBottom:16}}>
+            <div className="member-section-title" style={{marginTop:0,color:"#25d366"}}>📱 WHATSAPP NOTIFICATIONS</div>
+            <div style={{fontSize:12,color:"#4b5563",fontFamily:"'Barlow',sans-serif",marginBottom:14}}>Get instant WhatsApp alerts for leave requests, new members, salary advances and more.</div>
+            <div className="field-group">
+              <div className="field-label">Your WhatsApp Number</div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <span style={{color:"#25d366",fontWeight:700,fontFamily:"'Barlow',sans-serif"}}>+91</span>
+                <input type="tel" maxLength={10} placeholder="9876543210" value={ownerForm.ownerPhone} onChange={e=>setOwnerForm(p=>({...p,ownerPhone:e.target.value.replace(/\D/g,"").slice(0,10)}))} style={{flex:1,letterSpacing:2}}/>
+              </div>
+            </div>
+            <div className="field-group">
+              <div className="field-label">Your Name</div>
+              <input type="text" placeholder="Owner name" value={ownerForm.ownerName} onChange={e=>setOwnerForm(p=>({...p,ownerName:e.target.value}))}/>
+            </div>
+            <button className="save-btn" style={{width:"100%",background:"linear-gradient(135deg,#075e54,#25d366)"}} disabled={savingOwner} onClick={async()=>{
+              if(!ownerForm.ownerPhone||ownerForm.ownerPhone.length!==10){alert("Enter valid 10-digit number");return;}
+              setSavingOwner(true);
+              await onSaveGymConfig({...gymConfig,...ownerForm});
+              setSavingOwner(false);
+            }}>{savingOwner?"SAVING...":"💾 SAVE WHATSAPP NUMBER"}</button>
+            {gymConfig.ownerPhone&&<div style={{marginTop:10,fontSize:12,color:"#25d366",fontFamily:"'Barlow',sans-serif",textAlign:"center"}}>✅ Active — +91 {gymConfig.ownerPhone}</div>}
+          </div>
+        );
+      })()}
+
       {/* UPI Payment QR */}
       <div style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"18px"}}>
         <div className="member-section-title" style={{marginTop:0}}>💳 UPI PAYMENT QR</div>
@@ -2411,6 +2467,9 @@ function MemberPortal({member, members, gymConfig, gymId, gymName, onLogout, onS
     const checked = existing?.checked||[];
     if(!checked.includes(m.id)){
       await onSaveMemberAttend(today(),{checked:[...checked,m.id],updatedAt:new Date().toISOString()});
+    // Notify owner of check-in
+    const ciMsg="🏃 *Member Check-In - Surya Gym 2.0*\n\n"+m.name+" just checked in!\n📅 "+fmtDate(today())+"\n⏰ "+new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"});
+    notifyOwnerWA(gymConfig||{}, ciMsg);
       setCheckedIn(true);
     }
     setCheckInLoading(false);
@@ -3276,6 +3335,9 @@ function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove,
     window._getOwnerTokens&&window._getOwnerTokens().then(tokens=>{
       window._sendPushNotification&&window._sendPushNotification(tokens,"💵 Advance Request",emp.name+" requested ₹"+advanceForm.amount+" advance","advance");
     }).catch(()=>{});
+    // WhatsApp owner
+    const advMsg="💵 *Salary Advance Request - Surya Gym 2.0*\n\n👤 Staff: "+emp.name+"\n💰 Amount: ₹"+advanceForm.amount+"\n📝 Reason: "+advanceForm.reason+"\n\nPlease review in the app.";
+    notifyOwnerWA(gymConfig||{}, advMsg);
     showToast("✓ Advance request sent to owner!");
     setShowAdvance(false);setAdvanceForm({amount:"",reason:""});
   };
@@ -3594,7 +3656,7 @@ function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove,
       {/* ── LEAVE ── */}
       {portalTab==="leave"&&(
         <LeaveTab staff={staff} leaveReqs={myLeaves} showToast={showToast}
-          onApprove={onApprove} onReject={onReject}
+          onApprove={onApprove} onReject={onReject} gymConfig={gymConfig||{}}
           restrictToEmp={emp.id}
         />
       )}
