@@ -15,6 +15,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js";
     const firebaseConfig = {
       apiKey: "AIzaSyCqvx_WIP4Rgs4YvaAzLRc5WDZOMCmPWNI",
       authDomain: "surya-gym-attendance-267b8.firebaseapp.com",
@@ -59,6 +60,60 @@
     window._listenAnnouncements = (g,cb)       => onSnapshot(collection(db,P(g,"announcements")),s=>cb(s.docs.map(d=>d.data()).sort((a,b)=>(b.date||"").localeCompare(a.date||""))));
     window._saveAdvanceRequest  = async (id,d,g) => await setDoc(doc(db,P(g,"advances"),id),d);
     window._listenAdvances      = (g,cb)       => onSnapshot(collection(db,P(g,"advances")),s=>cb(s.docs.map(d=>d.data())));
+    // ── FCM Push Notifications ──
+    const VAPID_KEY = 'BO1hsRzWflrCiaJBl2hJXuXTOZPhTl2Vvj2lzIybJUdM1Z8eL1pgh1ngNbUu0CTLYQqnBNeRQYoE9mpbyiAufEQ';
+    const FCM_SERVER_KEY = 'AIzaSyBSuyYbmHVmFVdhYmehmsFd-hori9Q7kWE';
+
+    let messaging = null;
+    try { messaging = getMessaging(app); } catch(e) {}
+
+    // Save FCM token to Firestore
+    window._saveFCMToken = async (token, role, gymId) => {
+      await setDoc(doc(db, '_notifications', 'tokens_'+role), { token, role, gymId, updatedAt: new Date().toISOString() }, { merge: true });
+    };
+
+    // Load all owner tokens
+    window._getOwnerTokens = async () => {
+      const s = await getDoc(doc(db, '_notifications', 'tokens_owner'));
+      return s.exists() ? [s.data().token].filter(Boolean) : [];
+    };
+
+    // Send push notification via FCM REST API
+    window._sendPushNotification = async (tokens, title, body, tag) => {
+      if (!tokens || !tokens.length) return;
+      for (const token of tokens) {
+        try {
+          await fetch('https://fcm.googleapis.com/fcm/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'key=' + FCM_SERVER_KEY },
+            body: JSON.stringify({
+              to: token,
+              notification: { title, body, icon: '/logo.svg', badge: '/logo.svg', tag: tag||'surya-gym', click_action: '/' },
+              data: { title, body, tag: tag||'surya-gym' }
+            })
+          });
+        } catch(e) { console.warn('Push failed:', e); }
+      }
+    };
+
+    // Request permission + get token
+    window._requestNotificationPermission = async (role, gymId) => {
+      if (!messaging) return null;
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return null;
+        const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: await navigator.serviceWorker.ready });
+        if (token) { await window._saveFCMToken(token, role, gymId); }
+        return token;
+      } catch(e) { console.warn('FCM token error:', e); return null; }
+    };
+
+    // Listen to foreground messages
+    window._onForegroundMessage = (cb) => {
+      if (!messaging) return ()=>{};
+      return onMessage(messaging, cb);
+    };
+
     window._fbReady = true;
     window.dispatchEvent(new Event("firebaseReady"));
   </script>
@@ -487,6 +542,7 @@ function App(){
   const [members,     setMembers]     = useState([]);
   const [gymConfig,   setGymConfig]   = useState({});
   const [memberAttend,setMemberAttend]= useState(null);
+  const [notifEnabled, setNotifEnabled] = useState(false);
   const [ptClients,   setPtClients]   = useState([]);
   const [ptSessions,  setPtSessions]  = useState([]);
   const unsubRef  = useRef(null);
@@ -523,6 +579,22 @@ function App(){
     window._listenGymConfig(activeGymId,data=>setGymConfig(data||{}));
     return()=>{ if(unsubSRef.current)unsubSRef.current(); };
   },[fbReady,activeGymId]);
+
+  // Request notification permission when owner logs in
+  useEffect(()=>{
+    if(!session||session.role!=="owner"||!fbReady) return;
+    if(!("Notification" in window)) return;
+    if(Notification.permission==="granted"){
+      setNotifEnabled(true);
+      window._requestNotificationPermission("owner", activeGymId).catch(()=>{});
+    }
+    // Listen for foreground messages
+    const unsub = window._onForegroundMessage&&window._onForegroundMessage(payload=>{
+      const {title,body} = payload.notification||payload.data||{};
+      if(title) showToast("🔔 "+title+(body?" - "+body:""));
+    });
+    return ()=>{ if(unsub&&typeof unsub==="function") unsub(); };
+  },[session, fbReady]);
 
   useEffect(()=>{
     if(!fbReady)return;
@@ -672,6 +744,12 @@ function App(){
         </div>
         <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
           <span className="role-badge owner" style={{fontSize:10}}>👑 OWNER</span>
+          <button onClick={async()=>{
+            if(notifEnabled){showToast("🔔 Notifications already enabled!");return;}
+            const token=await window._requestNotificationPermission("owner",activeGymId);
+            if(token){setNotifEnabled(true);showToast("🔔 Notifications enabled!");}
+            else showToast("❌ Permission denied. Enable in phone settings.");
+          }} title="Enable Notifications" style={{cursor:"pointer",background:notifEnabled?"rgba(0,255,135,0.1)":"rgba(255,255,255,0.06)",border:"1px solid "+(notifEnabled?"rgba(0,255,135,0.4)":"rgba(255,255,255,0.15)"),borderRadius:7,padding:"6px 10px",color:notifEnabled?"#00ff87":"#6b7280",fontFamily:"'Barlow Condensed',sans-serif",fontSize:14,fontWeight:700}}>🔔</button>
           <button onClick={()=>setShowGymMgr(true)} title="Switch Location" style={{cursor:"pointer",background:"rgba(255,140,0,0.1)",border:"1px solid rgba(255,140,0,0.3)",borderRadius:7,padding:"6px 10px",color:"#ff8c00",fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:700,letterSpacing:1}}>🏛 GYMS</button>
           <button onClick={()=>setShowPwd(true)} style={{cursor:"pointer",background:"rgba(255,77,0,0.1)",border:"1px solid rgba(255,77,0,0.3)",borderRadius:7,padding:"6px 10px",color:"#ff4d00",fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:700,letterSpacing:1}}>✏️ STAFF</button>
           <button onClick={()=>setSession(null)} style={{cursor:"pointer",background:"rgba(255,77,109,0.08)",border:"1px solid rgba(255,77,109,0.25)",borderRadius:7,padding:"6px 10px",color:"#ff4d6d",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:11,letterSpacing:1}}>⏻</button>
@@ -1605,6 +1683,10 @@ function LeaveTab({staff,leaveReqs,showToast,onApprove,onReject,restrictToEmp,gy
     const id="leave_"+Date.now();
     const req={id,empId,empName:staff.find(e=>e.id===empId)?.name||"",leaveType,reason:reason.trim(),dates,fromDate,toDate,status:"pending",submittedAt:new Date().toISOString()};
     await window._saveLeaveReq(id,req,gymId||'gym_default');
+    // Notify owner
+    window._getOwnerTokens&&window._getOwnerTokens().then(tokens=>{
+      window._sendPushNotification&&window._sendPushNotification(tokens,"🏖 Leave Request",empName+" applied for leave on "+fromDate+(fromDate!==toDate?" – "+toDate:""),"leave");
+    }).catch(()=>{});
     setReason("");setFromDate(today());setToDate(today());
     setSubmitting(false);
     setSubTab("requests");
@@ -1816,6 +1898,11 @@ function MembersTab({members, gymId, gymConfig, staff, memberAttend, date, showT
     const pin=form.pin||form.phone.slice(-4);
     const data={...form,id,pin,expiryDate:expiry,updatedAt:new Date().toISOString(),createdAt:editMode?selMember.createdAt:new Date().toISOString()};
     await onSaveMember(id,data);
+    if(!editMode){
+      window._getOwnerTokens&&window._getOwnerTokens().then(tokens=>{
+        window._sendPushNotification&&window._sendPushNotification(tokens,"👤 New Member",data.name+" joined with "+data.package+" package","member");
+      }).catch(()=>{});
+    }
     showToast(editMode?"✓ Member updated!":"✓ Member added!");
     setSaving(false); resetForm(); setEditMode(false); setView("list");
   };
@@ -3186,6 +3273,9 @@ function StaffPortal({session, staff, allDates, leaveReqs, showToast, onApprove,
     if(!advanceForm.amount||!advanceForm.reason){showToast("Fill amount and reason");return;}
     const req={id:"adv_"+Date.now(),empId:emp.id,empName:emp.name,amount:advanceForm.amount,reason:advanceForm.reason,status:"pending",submittedAt:new Date().toISOString()};
     if(window._saveAdvanceRequest) await window._saveAdvanceRequest(req.id,req,gymId||'gym_default');
+    window._getOwnerTokens&&window._getOwnerTokens().then(tokens=>{
+      window._sendPushNotification&&window._sendPushNotification(tokens,"💵 Advance Request",emp.name+" requested ₹"+advanceForm.amount+" advance","advance");
+    }).catch(()=>{});
     showToast("✓ Advance request sent to owner!");
     setShowAdvance(false);setAdvanceForm({amount:"",reason:""});
   };
