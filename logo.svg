@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <radialGradient id="sunGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fff7a0"/>
+      <stop offset="40%" stop-color="#ffb700"/>
+      <stop offset="100%" stop-color="#ff4d00"/>
+    </radialGradient>
+    <radialGradient id="coreGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#ffd60a"/>
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Outer rays (long) -->
+  <g filter="url(#glow)" opacity="0.9">
+    <line x1="50" y1="5"  x2="50" y2="18" stroke="url(#sunGrad)" stroke-width="3.5" stroke-linecap="round"/>
+    <line x1="50" y1="82" x2="50" y2="95" stroke="url(#sunGrad)" stroke-width="3.5" stroke-linecap="round"/>
+    <line x1="5"  y1="50" x2="18" y2="50" stroke="url(#sunGrad)" stroke-width="3.5" stroke-linecap="round"/>
+    <line x1="82" y1="50" x2="95" y2="50" stroke="url(#sunGrad)" stroke-width="3.5" stroke-linecap="round"/>
+    <line x1="16" y1="16" x2="25" y2="25" stroke="url(#sunGrad)" stroke-width="3.5" stroke-linecap="round"/>
+    <line x1="75" y1="75" x2="84" y2="84" stroke="url(#sunGrad)" stroke-width="3.5" stroke-linecap="round"/>
+    <line x1="84" y1="16" x2="75" y2="25" stroke="url(#sunGrad)" stroke-width="3.5" stroke-linecap="round"/>
+    <line x1="16" y1="84" x2="25" y2="75" stroke="url(#sunGrad)" stroke-width="3.5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Mid rays (short, diagonal offset) -->
+  <g filter="url(#glow)" opacity="0.6">
+    <line x1="50" y1="10" x2="50" y2="20" stroke="#ffb700" stroke-width="2" stroke-linecap="round" transform="rotate(22.5 50 50)"/>
+    <line x1="50" y1="10" x2="50" y2="20" stroke="#ffb700" stroke-width="2" stroke-linecap="round" transform="rotate(67.5 50 50)"/>
+    <line x1="50" y1="10" x2="50" y2="20" stroke="#ffb700" stroke-width="2" stroke-linecap="round" transform="rotate(112.5 50 50)"/>
+    <line x1="50" y1="10" x2="50" y2="20" stroke="#ffb700" stroke-width="2" stroke-linecap="round" transform="rotate(157.5 50 50)"/>
+    <line x1="50" y1="10" x2="50" y2="20" stroke="#ffb700" stroke-width="2" stroke-linecap="round" transform="rotate(202.5 50 50)"/>
+    <line x1="50" y1="10" x2="50" y2="20" stroke="#ffb700" stroke-width="2" stroke-linecap="round" transform="rotate(247.5 50 50)"/>
+    <line x1="50" y1="10" x2="50" y2="20" stroke="#ffb700" stroke-width="2" stroke-linecap="round" transform="rotate(292.5 50 50)"/>
+    <line x1="50" y1="10" x2="50" y2="20" stroke="#ffb700" stroke-width="2" stroke-linecap="round" transform="rotate(337.5 50 50)"/>
+  </g>
+
+  <!-- Sun body -->
+  <circle cx="50" cy="50" r="22" fill="url(#sunGrad)" filter="url(#glow)"/>
+
+  <!-- Sun core -->
+  <circle cx="50" cy="50" r="14" fill="url(#coreGrad)"/>
+
+  <!-- S letter in center -->
+  <text x="50" y="56" text-anchor="middle" font-family="Arial Black, sans-serif" font-weight="900" font-size="16" fill="#ff4d00" letter-spacing="-1">S</text>
+</svg>
